@@ -212,16 +212,83 @@
     return { columns, contacts, phoneColumnId };
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!message || message.type !== "GET_CONTACTS") return;
+  async function createContactNote(recordId, noteBody) {
+    const numericId = Number(String(recordId || "").replace(/\D/g, ""));
+    if (!Number.isFinite(numericId) || numericId <= 0) {
+      throw new Error("Invalid Record ID");
+    }
 
-    try {
-      const countryPrefix = String(message.countryPrefix || DEFAULT_COUNTRY_CODE);
-      const messageText = String(message.messageText || "");
-      const payload = extractTableContacts(countryPrefix, messageText);
-      sendResponse({ ok: true, ...payload });
-    } catch (error) {
-      sendResponse({ ok: false, error: String(error) });
+    const payload = {
+      engagement: {
+        active: true,
+        type: "NOTE",
+        timestamp: Date.now()
+      },
+      associations: {
+        contactIds: [numericId],
+        companyIds: [],
+        dealIds: [],
+        ownerIds: []
+      },
+      metadata: {
+        body: String(noteBody || "").trim() || "Reached out on WhatsApp"
+      }
+    };
+
+    const response = await fetch("/engagements/v1/engagements", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`HTTP ${response.status}${errorText ? `: ${errorText}` : ""}`);
+    }
+  }
+
+  async function logWhatsappNotes(recordIds, noteBody) {
+    const uniqueIds = [...new Set((Array.isArray(recordIds) ? recordIds : []).map((id) => String(id || "").replace(/\D/g, "")).filter(Boolean))];
+    const failed = [];
+    let created = 0;
+
+    for (const recordId of uniqueIds) {
+      try {
+        await createContactNote(recordId, noteBody);
+        created += 1;
+      } catch (error) {
+        failed.push({ recordId, error: String(error) });
+      }
+    }
+
+    return { ok: true, created, failed };
+  }
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!message || !message.type) return;
+
+    if (message.type === "GET_CONTACTS") {
+      try {
+        const countryPrefix = String(message.countryPrefix || DEFAULT_COUNTRY_CODE);
+        const messageText = String(message.messageText || "");
+        const payload = extractTableContacts(countryPrefix, messageText);
+        sendResponse({ ok: true, ...payload });
+      } catch (error) {
+        sendResponse({ ok: false, error: String(error) });
+      }
+      return;
+    }
+
+    if (message.type === "LOG_WHATSAPP_NOTES") {
+      const recordIds = Array.isArray(message.recordIds) ? message.recordIds : [];
+      const noteBody = String(message.noteBody || "");
+      logWhatsappNotes(recordIds, noteBody)
+        .then((result) => sendResponse(result))
+        .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      return true;
     }
   });
 })();

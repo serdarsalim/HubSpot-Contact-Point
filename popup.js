@@ -15,12 +15,14 @@ const refreshBtn = document.getElementById("refreshBtn");
 const csvSelectedBtn = document.getElementById("csvSelectedBtn");
 const vcfSelectedBtn = document.getElementById("vcfSelectedBtn");
 const copyEmailBtn = document.getElementById("copyEmailBtn");
+const logWhatsappBtn = document.getElementById("logWhatsappBtn");
 
 const countryPrefixInput = document.getElementById("countryPrefixInput");
 const messageTemplateInput = document.getElementById("messageTemplateInput");
 const rowFilterInput = document.getElementById("rowFilterInput");
 
 const SETTINGS_KEY = "popupSettings";
+const WHATSAPP_NOTE_TEXT = "Reached out on WhatsApp";
 const DEFAULT_SETTINGS = {
   countryPrefix: "60",
   messageTemplate: "",
@@ -407,6 +409,33 @@ function findEmailColumn() {
   return currentColumns.find((c) => /email/i.test(c.label) || /^email(_\d+)?$/i.test(c.id)) || null;
 }
 
+function findRecordIdColumn() {
+  return (
+    currentColumns.find((c) => /record\s*id/i.test(c.label) || /^(record_id|recordid|hs_object_id|hs_objectid)$/i.test(c.id)) || null
+  );
+}
+
+function getSelectedRecordIds() {
+  const contacts = getSelectedContacts();
+  const recordIdColumn = findRecordIdColumn();
+  if (!recordIdColumn) return [];
+
+  return [...new Set(contacts.map((c) => String(c.values?.[recordIdColumn.id] || "").replace(/\D/g, "")).filter(Boolean))];
+}
+
+async function findHubSpotTab() {
+  const tabs = await chrome.tabs.query({ url: ["https://app.hubspot.com/*"] });
+  if (!tabs.length) return null;
+
+  const sorted = [...tabs].sort((a, b) => {
+    const aLast = Number(a.lastAccessed || 0);
+    const bLast = Number(b.lastAccessed || 0);
+    return bLast - aLast;
+  });
+
+  return sorted[0] || null;
+}
+
 async function copyTextToClipboard(text) {
   if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
     await navigator.clipboard.writeText(text);
@@ -474,13 +503,48 @@ async function copyEmailSelected() {
   }
 }
 
+async function logWhatsappNoteSelected() {
+  const recordIds = getSelectedRecordIds();
+  if (!recordIds.length) {
+    setStatus("No selected rows with Record ID found.");
+    return;
+  }
+
+  try {
+    const tab = await findHubSpotTab();
+    if (!tab || typeof tab.id !== "number") {
+      setStatus("Open a HubSpot tab (app.hubspot.com), refresh it, and try again.");
+      return;
+    }
+
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: "LOG_WHATSAPP_NOTES",
+      recordIds,
+      noteBody: WHATSAPP_NOTE_TEXT
+    });
+
+    if (!response || !response.ok) {
+      setStatus("Could not create notes. Open HubSpot tab and try again.");
+      return;
+    }
+
+    const created = Number(response.created || 0);
+    const failed = Array.isArray(response.failed) ? response.failed.length : 0;
+    if (failed > 0) {
+      setStatus(`Logged ${created} note(s). Failed ${failed}.`);
+    } else {
+      setStatus(`Logged ${created} note(s).`);
+    }
+  } catch (_error) {
+    setStatus("Could not create notes. Open HubSpot tab and try again.");
+  }
+}
+
 async function loadContacts() {
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
-
+    const tab = await findHubSpotTab();
     if (!tab || typeof tab.id !== "number") {
-      setStatus("No active tab found.");
+      setStatus("Open a HubSpot tab (app.hubspot.com), refresh it, and try again.");
       return;
     }
 
@@ -524,6 +588,9 @@ csvSelectedBtn.addEventListener("click", exportCsvSelected);
 vcfSelectedBtn.addEventListener("click", exportVcfSelected);
 copyEmailBtn.addEventListener("click", () => {
   void copyEmailSelected();
+});
+logWhatsappBtn.addEventListener("click", () => {
+  void logWhatsappNoteSelected();
 });
 
 async function init() {
