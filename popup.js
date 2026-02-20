@@ -11,6 +11,7 @@ const columnChecks = document.getElementById("columnChecks");
 const refreshBtn = document.getElementById("refreshBtn");
 const csvSelectedBtn = document.getElementById("csvSelectedBtn");
 const vcfSelectedBtn = document.getElementById("vcfSelectedBtn");
+const exportActionsEl = document.getElementById("exportActions");
 
 const countryPrefixInput = document.getElementById("countryPrefixInput");
 
@@ -27,6 +28,35 @@ let displayedContacts = [];
 let phoneColumnId = null;
 let selectedKeys = new Set();
 let sortState = { field: null, direction: "asc" };
+
+function columnType(col) {
+  if (col.id === phoneColumnId) return "phone";
+  if (/name/i.test(col.label) || /^name(_\d+)?$/.test(col.id)) return "name";
+  if (/email/i.test(col.label) || /^email(_\d+)?$/.test(col.id)) return "email";
+  if (/possibility/i.test(col.label) || /^possibility(_\d+)?$/.test(col.id)) return "possibility";
+  return "plain";
+}
+
+function columnClasses(col) {
+  const type = columnType(col);
+  return type === "plain" ? "plain" : `plain ${type}`;
+}
+
+function sortAria(field) {
+  if (sortState.field !== field) return "none";
+  return sortState.direction === "asc" ? "ascending" : "descending";
+}
+
+function toggleSort(field) {
+  if (!field) return;
+  if (sortState.field === field) {
+    sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+  } else {
+    sortState.field = field;
+    sortState.direction = "asc";
+  }
+  renderContacts();
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -100,6 +130,7 @@ function compareValues(a, b, field) {
 
 function renderContacts() {
   listEl.innerHTML = "";
+  updateExportActionsVisibility();
 
   if (!currentContacts.length) {
     statusEl.textContent = "No contacts with phone numbers found on this view.";
@@ -119,7 +150,10 @@ function renderContacts() {
   const allShownSelected = displayedContacts.length > 0 && displayedContacts.every((c) => selectedKeys.has(contactKey(c)));
 
   const headerHtml = visibleColumns
-    .map((col) => `<th class='sortable' data-sort-field='${escapeHtml(col.id)}'>${escapeHtml(col.label)}${sortIndicator(col.id)}</th>`)
+    .map(
+      (col) =>
+        `<th class='sortable ${columnClasses(col)}' data-sort-field='${escapeHtml(col.id)}' tabindex='0' aria-sort='${sortAria(col.id)}'>${escapeHtml(col.label)}${sortIndicator(col.id)}</th>`
+    )
     .join("");
 
   const rowsHtml = displayedContacts
@@ -130,12 +164,12 @@ function renderContacts() {
       const cellsHtml = visibleColumns
         .map((col) => {
           const value = contact.values?.[col.id] || "-";
+          const css = columnClasses(col);
 
           if (col.id === phoneColumnId && contact.waUrl) {
-            return `<td class='phone'><a href='${escapeHtml(contact.waUrl)}' target='_blank' rel='noopener noreferrer'>${escapeHtml(value)}</a></td>`;
+            return `<td class='${css}'><a href='${escapeHtml(contact.waUrl)}' target='_blank' rel='noopener noreferrer'>${escapeHtml(value)}</a></td>`;
           }
 
-          const css = col.id === "name" ? "name" : col.id === "email" ? "email" : "plain";
           return `<td class='${css}'>${escapeHtml(value)}</td>`;
         })
         .join("");
@@ -164,14 +198,13 @@ function renderContacts() {
   listEl.querySelectorAll("th.sortable").forEach((header) => {
     header.addEventListener("click", () => {
       const field = header.getAttribute("data-sort-field");
-      if (!field) return;
-      if (sortState.field === field) {
-        sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
-      } else {
-        sortState.field = field;
-        sortState.direction = "asc";
-      }
-      renderContacts();
+      toggleSort(field);
+    });
+    header.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      const field = header.getAttribute("data-sort-field");
+      toggleSort(field);
     });
   });
 
@@ -181,6 +214,7 @@ function renderContacts() {
       if (!key) return;
       if (input.checked) selectedKeys.add(key);
       else selectedKeys.delete(key);
+      updateExportActionsVisibility();
       statusEl.textContent = `Found ${currentContacts.length} contact(s). Selected ${selectedKeys.size}.`;
     });
   });
@@ -267,6 +301,13 @@ function downloadText(filename, content, mimeType) {
 
 function getSelectedContacts() {
   return currentContacts.filter((c) => selectedKeys.has(contactKey(c)));
+}
+
+function updateExportActionsVisibility() {
+  const hasSelection = getSelectedContacts().length > 0;
+  if (exportActionsEl) exportActionsEl.hidden = !hasSelection;
+  if (csvSelectedBtn) csvSelectedBtn.hidden = !hasSelection;
+  if (vcfSelectedBtn) vcfSelectedBtn.hidden = !hasSelection;
 }
 
 function buildCsvRows(contacts) {

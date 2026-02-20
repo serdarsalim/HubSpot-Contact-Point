@@ -19,7 +19,9 @@
         padding: 12px;
         width: 860px;
         max-height: 620px;
-        overflow: auto;
+        box-sizing: border-box;
+        overflow-x: hidden;
+        overflow-y: auto;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
         color: var(--text);
@@ -36,6 +38,43 @@
         margin: 0;
         font-size: 20px;
         color: var(--brand);
+      }
+
+      .title-tools {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .title-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #5a6d82;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: color 120ms ease, transform 120ms ease;
+      }
+
+      .title-icon-btn svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+      }
+
+      .title-icon-btn:hover {
+        color: var(--brand);
+        transform: translateY(-1px);
+      }
+
+      .title-icon-btn:focus-visible {
+        outline: 2px solid #0b66c3;
+        outline-offset: 2px;
       }
 
       .icon-btn,
@@ -97,9 +136,10 @@
       }
 
       table {
-        width: 100%;
+        width: max-content;
+        min-width: 100%;
         border-collapse: collapse;
-        table-layout: fixed;
+        table-layout: auto;
       }
 
       th,
@@ -111,17 +151,28 @@
         vertical-align: top;
       }
 
+      th.plain,
+      td.plain {
+        white-space: nowrap;
+      }
+
       th {
         background: #eef4fb;
         color: #24476d;
         font-weight: 700;
         position: sticky;
         top: 0;
+        z-index: 1;
       }
 
       th.sortable {
         cursor: pointer;
         user-select: none;
+      }
+
+      th.sortable:focus-visible {
+        outline: 2px solid #0b66c3;
+        outline-offset: -2px;
       }
 
       tr:last-child td {
@@ -134,8 +185,8 @@
         max-width: 36px;
       }
 
+      th.name,
       td.name {
-        font-weight: 600;
         width: 180px;
         max-width: 180px;
         white-space: nowrap;
@@ -143,15 +194,24 @@
         text-overflow: ellipsis;
       }
 
+      td.name {
+        font-weight: 600;
+      }
+
+      th.email,
       td.email {
         width: 220px;
         max-width: 220px;
-        color: #4f6274;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
+      td.email {
+        color: #4f6274;
+      }
+
+      th.phone,
       td.phone {
         width: 170px;
         max-width: 170px;
@@ -168,12 +228,22 @@
         text-decoration: underline;
       }
 
+      td.phone a:focus-visible {
+        outline: 2px solid #0b66c3;
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+
+      th.possibility,
       td.possibility {
         width: 120px;
         max-width: 120px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      td.possibility {
         color: #334e68;
       }
 
@@ -255,16 +325,26 @@
   </head>
   <body>
     <div class="topbar">
-      <button id="settingsBtn" class="icon-btn">Settings</button>
       <h1>HubSpot Contacts</h1>
+      <div class="title-tools">
+        <button id="refreshBtn" class="title-icon-btn" aria-label="Refresh contacts" title="Refresh contacts">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+            <polyline points="21 3 21 9 15 9"></polyline>
+          </svg>
+        </button>
+        <button id="settingsBtn" class="title-icon-btn" aria-label="Open settings" title="Open settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.26.3.45.65.6 1 .08.31.11.63.1.95a2 2 0 0 1 1.9 2.05 2 2 0 0 1-1.9 2.05c.01.32-.02.64-.1.95-.15.35-.34.7-.6 1z"></path>
+          </svg>
+        </button>
+      </div>
     </div>
 
-    <p class="meta">Click a phone number to open WhatsApp.</p>
-
-    <div class="actions">
-      <button id="refreshBtn" class="btn">Refresh</button>
-      <button id="csvSelectedBtn" class="btn">CSV Selected</button>
-      <button id="vcfSelectedBtn" class="btn">VCF Selected</button>
+    <div id="exportActions" class="actions" hidden>
+      <button id="csvSelectedBtn" class="btn" hidden>CSV Selected</button>
+      <button id="vcfSelectedBtn" class="btn" hidden>VCF Selected</button>
     </div>
 
     <div id="status" class="status">Loading contacts...</div>

@@ -33,6 +33,11 @@
     return cleanText(tokens.join(" "));
   }
 
+  function sanitizeNameValue(rawName) {
+    const withoutPreview = cleanText(rawName).replace(/\bpreview\b/gi, " ");
+    return removeLeadingInitials(stripOuterNoise(withoutPreview));
+  }
+
   function cleanPhoneCandidate(raw) {
     let text = cleanText(raw || "");
     if (!text) return "";
@@ -154,8 +159,8 @@
           continue;
         }
 
-        if (/^name$/i.test(col.label)) {
-          value = removeLeadingInitials(stripOuterNoise(value));
+        if (/name/i.test(col.label) || /^name(_\d+)?$/i.test(col.id)) {
+          value = sanitizeNameValue(value);
         }
 
         values[col.id] = value;
