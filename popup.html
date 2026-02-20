@@ -42,6 +42,7 @@
       table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
         background: #ffffff;
         border: 1px solid #dce5ee;
         border-radius: 10px;
@@ -65,23 +66,38 @@
         top: 0;
       }
 
+      th.sortable {
+        cursor: pointer;
+        user-select: none;
+      }
+
       tr:last-child td {
         border-bottom: none;
       }
 
       td.name {
         font-weight: 600;
-        min-width: 260px;
+        width: 200px;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       td.email {
-        min-width: 230px;
+        width: 220px;
+        max-width: 220px;
         color: #4f6274;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         word-break: break-all;
       }
 
       td.phone {
-        min-width: 170px;
+        width: 180px;
+        max-width: 180px;
+        white-space: nowrap;
       }
 
       td.phone a {
@@ -92,6 +108,15 @@
 
       td.phone a:hover {
         text-decoration: underline;
+      }
+
+      td.possibility {
+        width: 110px;
+        max-width: 110px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #334e68;
       }
     </style>
   </head>

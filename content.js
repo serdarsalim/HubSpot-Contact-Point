@@ -2,6 +2,56 @@
   const DEFAULT_COUNTRY_CODE = "60";
   const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{6,}\d)/g;
   const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const DAY_TIME_PATTERN = /\b(?:Today|Yesterday)\s+at\s+\d{1,2}:\d{2}\s+GMT[+-]\d+\b/gi;
+  const MONTH_TIME_PATTERN = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{1,2}:\d{2}\s+GMT[+-]\d+\b/gi;
+
+  function stripOuterNoise(text) {
+    return cleanText((text || "").replace(/^[\s\-–—|]+|[\s\-–—|]+$/g, "").replace(/\s*--\s*--\s*/g, " "));
+  }
+
+  function extractNameAndPossibility(sourceText) {
+    let text = cleanText(sourceText || "");
+    if (!text) return { name: "Unknown", possibility: "-" };
+
+    text = cleanText(text.replace(EMAIL_PATTERN, "").replace(PHONE_PATTERN, ""));
+    const previewParts = text.split(/\bPreview\b/i).map(cleanText);
+    const nameCandidate = stripOuterNoise(previewParts[0] || "");
+    let possibility = "";
+
+    if (previewParts.length > 1) {
+      let remainder = cleanText(previewParts.slice(1).join(" "));
+      remainder = cleanText(remainder.replace(MONTH_TIME_PATTERN, " "));
+
+      const midMatch = remainder.match(/GMT[+-]\d+\s+(.+?)\s+(?:Today|Yesterday)\s+at\s+\d{1,2}:\d{2}\s+GMT[+-]\d+/i);
+      if (midMatch && midMatch[1]) {
+        possibility = stripOuterNoise(midMatch[1]);
+      }
+
+      if (!possibility) {
+        const endMatch = remainder.match(/(?:Today|Yesterday)\s+at\s+\d{1,2}:\d{2}\s+GMT[+-]\d+\s+(.+)$/i);
+        if (endMatch && endMatch[1]) {
+          possibility = stripOuterNoise(endMatch[1]);
+        }
+      }
+
+      if (!possibility) {
+        const keywordMatch = remainder.match(/\b(?:\d+\s*-\s*[A-Za-z\u00C0-\u024F]+(?:\s+[A-Za-z\u00C0-\u024F]+)*|N\/A\s+[A-Za-z\u00C0-\u024F]+(?:\s+[A-Za-z\u00C0-\u024F]+)*)\b/i);
+        if (keywordMatch && keywordMatch[0]) {
+          possibility = stripOuterNoise(keywordMatch[0]);
+        }
+      }
+    }
+
+    const fallback = cleanText(
+      text
+        .replace(/\bPreview\b/gi, " ")
+        .replace(DAY_TIME_PATTERN, " ")
+        .replace(MONTH_TIME_PATTERN, " ")
+    );
+
+    const name = nameCandidate || stripOuterNoise(fallback.split(" ").slice(0, 5).join(" ")) || "Unknown";
+    return { name, possibility: possibility || "-" };
+  }
 
   function normalizePhone(raw) {
     const trimmed = (raw || "").trim();
@@ -53,24 +103,7 @@
 
     if (!phones.length) return [];
 
-    const parts = text.split(/\n|\||•|,/).map(cleanText).filter(Boolean);
-    let name = "";
-
-    for (const part of parts) {
-      const looksEmail = EMAIL_PATTERN.test(part);
-      EMAIL_PATTERN.lastIndex = 0;
-      const looksPhone = PHONE_PATTERN.test(part);
-      PHONE_PATTERN.lastIndex = 0;
-
-      if (!looksEmail && !looksPhone && part.length >= 2 && part.length <= 80) {
-        name = part;
-        break;
-      }
-    }
-
-    if (!name) {
-      name = cleanText(text.replace(EMAIL_PATTERN, "").replace(PHONE_PATTERN, "")).slice(0, 80) || "Unknown";
-    }
+    const { name, possibility } = extractNameAndPossibility(text);
 
     const primaryEmail = emails[0] || "";
 
@@ -79,6 +112,7 @@
       email: primaryEmail,
       phoneDisplay: phone.raw,
       phoneDigits: phone.normalized,
+      possibility,
       waUrl: `https://wa.me/${phone.normalized}`
     }));
   }
@@ -115,13 +149,14 @@
       const context = cleanText(container?.innerText || "");
       const emailMatch = context.match(EMAIL_PATTERN);
       const email = emailMatch ? emailMatch[0] : "";
-      const name = cleanText(context.replace(EMAIL_PATTERN, "").replace(PHONE_PATTERN, "")).slice(0, 80) || "Unknown";
+      const parsed = extractNameAndPossibility(context);
 
       all.push({
-        name,
+        name: parsed.name,
         email,
         phoneDisplay: raw,
         phoneDigits: normalized,
+        possibility: parsed.possibility,
         waUrl: `https://wa.me/${normalized}`
       });
     });
