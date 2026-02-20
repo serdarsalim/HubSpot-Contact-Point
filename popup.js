@@ -20,7 +20,7 @@ function renderContacts(contacts) {
 
   statusEl.textContent = `Found ${contacts.length} contact(s).`;
 
-  const html = contacts
+  const rowsHtml = contacts
     .map((c) => {
       const safeName = escapeHtml(c.name || "Unknown");
       const safeEmail = escapeHtml(c.email || "-");
@@ -28,16 +28,27 @@ function renderContacts(contacts) {
       const safeUrl = escapeHtml(c.waUrl);
 
       return `
-        <div class="item">
-          <div class="name">${safeName}</div>
-          <div class="email">${safeEmail}</div>
-          <div class="phone"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeDisplay}</a></div>
-        </div>
+        <tr>
+          <td class="name">${safeName}</td>
+          <td class="email">${safeEmail}</td>
+          <td class="phone"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeDisplay}</a></td>
+        </tr>
       `;
     })
     .join("");
 
-  listEl.innerHTML = html;
+  listEl.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone Number</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
 }
 
 async function loadContacts() {
