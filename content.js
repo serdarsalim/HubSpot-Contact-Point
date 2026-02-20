@@ -128,6 +128,17 @@
     return phoneCol ? phoneCol.id : null;
   }
 
+  function findNameColumnId(columns) {
+    const nameCol = columns.find((c) => /name/i.test(c.label) || /^name(_\d+)?$/i.test(c.id));
+    return nameCol ? nameCol.id : null;
+  }
+
+  function applyMessageTemplate(template, values, nameColumnId) {
+    const rawName = cleanText(values?.[nameColumnId || ""] || "");
+    const firstName = rawName ? rawName.split(" ")[0] : "";
+    return String(template || "").replace(/\[name\]/gi, firstName);
+  }
+
   function extractTableContacts(countryPrefix = DEFAULT_COUNTRY_CODE, messageText = "") {
     const headerInfo = findHeaderRow();
     if (!headerInfo) {
@@ -141,6 +152,7 @@
 
     const rows = getDataRows(headerInfo);
     const phoneColumnId = findPhoneColumnId(columns);
+    const nameColumnId = findNameColumnId(columns);
 
     const contacts = [];
     const seen = new Set();
@@ -181,7 +193,7 @@
 
       const phoneDigits = phoneRaw ? normalizePhone(phoneRaw, countryPrefix) || "" : "";
       const baseWaUrl = phoneDigits ? `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number` : "";
-      const text = cleanText(messageText || "");
+      const text = cleanText(applyMessageTemplate(messageText, values, nameColumnId));
       const waUrl = baseWaUrl ? (text ? `${baseWaUrl}&text=${encodeURIComponent(text)}` : baseWaUrl) : "";
 
       const key = columns.map((c) => values[c.id] || "").join("|");
