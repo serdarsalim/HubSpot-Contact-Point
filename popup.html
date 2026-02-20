@@ -389,8 +389,32 @@
         display: flex;
       }
 
+      .notes-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(13, 25, 38, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+      }
+
+      .notes-overlay.open {
+        display: flex;
+      }
+
       .settings-card {
         width: 440px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 20px 40px rgba(8, 30, 60, 0.15);
+      }
+
+      .notes-card {
+        width: 560px;
+        max-width: calc(100vw - 32px);
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 14px;
@@ -405,9 +429,55 @@
         margin-bottom: 12px;
       }
 
+      .notes-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
       .settings-head h2 {
         margin: 0;
         font-size: 16px;
+      }
+
+      .notes-head h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .notes-list {
+        min-height: 80px;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #e5edf5;
+        background: #f8fbff;
+        border-radius: 10px;
+        padding: 8px;
+        margin-bottom: 12px;
+      }
+
+      .note-item {
+        padding: 8px;
+        background: #fff;
+        border: 1px solid #e5edf5;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-size: 13px;
+        line-height: 1.35;
+        color: #22384f;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .note-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .notes-empty {
+        font-size: 13px;
+        color: #5e7084;
+        padding: 6px 4px;
       }
 
       .field {
@@ -513,7 +583,7 @@
         </div>
 
         <div class="field">
-          <label for="noteTemplateInput">Default note for Actions > Add Note</label>
+          <label for="noteTemplateInput">Default note for Actions > Notes</label>
           <textarea id="noteTemplateInput" placeholder="Reached out on WhatsApp"></textarea>
         </div>
 
@@ -530,6 +600,29 @@
         <div class="settings-actions">
           <button id="cancelSettingsBtn" class="btn">Cancel</button>
           <button id="saveSettingsBtn" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="notesOverlay" class="notes-overlay">
+      <div class="notes-card">
+        <div class="notes-head">
+          <h2 id="notesTitle">Notes</h2>
+          <button id="closeNotesBtn" class="icon-btn">Close</button>
+        </div>
+
+        <div id="notesList" class="notes-list">
+          <div class="notes-empty">Loading notes...</div>
+        </div>
+
+        <div class="field">
+          <label for="notesTextInput">Add note</label>
+          <textarea id="notesTextInput" placeholder="Reached out on WhatsApp"></textarea>
+        </div>
+
+        <div class="settings-actions">
+          <button id="cancelNotesBtn" class="btn">Cancel</button>
+          <button id="saveNoteBtn" class="btn primary">Save Note</button>
         </div>
       </div>
     </div>

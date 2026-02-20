@@ -357,6 +357,97 @@
     return { ok: true };
   }
 
+  function isEditorElement(element) {
+    if (!element) return false;
+    if (element.matches("textarea, input, [contenteditable='true'], [role='textbox']")) return true;
+    return !!element.querySelector("textarea, input, [contenteditable='true'], [role='textbox']");
+  }
+
+  function normalizeNoteText(rawText) {
+    const lines = String(rawText || "")
+      .split(/\n+/)
+      .map((line) => cleanText(line))
+      .filter(Boolean)
+      .filter((line) => {
+        const lower = line.toLowerCase();
+        if (lower === "note") return false;
+        if (lower === "add note") return false;
+        if (lower.includes("save note")) return false;
+        if (lower === "cancel") return false;
+        return true;
+      });
+
+    return cleanText(lines.join(" "));
+  }
+
+  function getNotesFromPage(limit = 25) {
+    const max = Math.max(1, Math.min(100, Number(limit) || 25));
+    const selectors = [
+      "[data-engagement-type='NOTE']",
+      "[data-engagement-type='note']",
+      "[data-activity-type='NOTE']",
+      "[data-activity-type='note']",
+      "[data-testid*='note']",
+      "[data-test-id*='note']",
+      "[data-selenium-test*='note']",
+      "[aria-label*='note' i]"
+    ];
+
+    const candidateSet = new Set();
+    const candidates = [];
+
+    for (const selector of selectors) {
+      const elements = Array.from(document.querySelectorAll(selector));
+      for (const element of elements) {
+        if (!(element instanceof Element)) continue;
+        const card = element.closest("[role='listitem'], article, li, section") || element;
+        if (candidateSet.has(card)) continue;
+        candidateSet.add(card);
+        candidates.push(card);
+      }
+    }
+
+    const fallbackCards = Array.from(document.querySelectorAll("[role='listitem'], article"));
+    for (const card of fallbackCards) {
+      if (candidateSet.has(card)) continue;
+      const text = elementText(card).toLowerCase();
+      if (!text || !text.includes("note")) continue;
+      candidateSet.add(card);
+      candidates.push(card);
+      if (candidates.length >= 220) break;
+    }
+
+    const seen = new Set();
+    const notes = [];
+
+    for (const card of candidates) {
+      if (!isVisible(card)) continue;
+      if (isEditorElement(card)) continue;
+
+      const raw = elementText(card);
+      if (!raw) continue;
+      if (raw.length < 8 || raw.length > 1400) continue;
+
+      const normalized = normalizeNoteText(raw);
+      if (!normalized) continue;
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      notes.push(normalized);
+      if (notes.length >= max) break;
+    }
+
+    return notes;
+  }
+
+  async function getNotesOnPage(limit = 25) {
+    for (let i = 0; i < 14; i += 1) {
+      const notes = getNotesFromPage(limit);
+      if (notes.length) return notes;
+      await sleep(450);
+    }
+    return [];
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || !message.type) return;
 
@@ -381,6 +472,14 @@
       const noteBody = String(message.noteBody || "");
       createNoteOnPage(noteBody)
         .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      return true;
+    }
+
+    if (message.type === "GET_NOTES_ON_PAGE") {
+      const limit = Number(message.limit || 25);
+      getNotesOnPage(limit)
+        .then((notes) => sendResponse({ ok: true, notes }))
         .catch((error) => sendResponse({ ok: false, error: String(error) }));
       return true;
     }

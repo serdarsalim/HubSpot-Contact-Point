@@ -10,6 +10,13 @@ const cancelSettingsBtn = document.getElementById("cancelSettingsBtn");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const settingsOverlay = document.getElementById("settingsOverlay");
 const columnChecks = document.getElementById("columnChecks");
+const notesOverlay = document.getElementById("notesOverlay");
+const notesTitleEl = document.getElementById("notesTitle");
+const notesListEl = document.getElementById("notesList");
+const notesTextInput = document.getElementById("notesTextInput");
+const closeNotesBtn = document.getElementById("closeNotesBtn");
+const cancelNotesBtn = document.getElementById("cancelNotesBtn");
+const saveNoteBtn = document.getElementById("saveNoteBtn");
 
 const refreshBtn = document.getElementById("refreshBtn");
 const csvSelectedBtn = document.getElementById("csvSelectedBtn");
@@ -39,6 +46,13 @@ let displayedContacts = [];
 let phoneColumnId = null;
 let selectedKeys = new Set();
 let sortState = { field: null, direction: "asc" };
+let notesDialogState = {
+  recordId: "",
+  contactName: "",
+  notes: [],
+  loading: false
+};
+let notesLoadToken = 0;
 
 function columnType(col) {
   if (col.id === phoneColumnId) return "phone";
@@ -231,7 +245,7 @@ function renderContacts() {
         <tr>
           <td class='sel'><input type='checkbox' class='row-select' data-key='${escapeHtml(key)}' ${checked} /></td>
           ${cellsHtml}
-          <td class='actions'><button type='button' class='row-action-btn row-add-note' data-key='${escapeHtml(key)}'>Add Note</button></td>
+          <td class='actions'><button type='button' class='row-action-btn row-notes-btn' data-key='${escapeHtml(key)}'>Notes</button></td>
         </tr>
       `;
     })
@@ -274,7 +288,7 @@ function renderContacts() {
     });
   });
 
-  listEl.querySelectorAll(".row-add-note").forEach((button) => {
+  listEl.querySelectorAll(".row-notes-btn").forEach((button) => {
     button.addEventListener("click", async () => {
       const key = button.getAttribute("data-key");
       if (!key) return;
@@ -284,23 +298,7 @@ function renderContacts() {
         setStatus("Could not find Record ID for this row.");
         return;
       }
-
-      const defaultNote = settings.noteTemplate || DEFAULT_NOTE_TEXT;
-      const noteBody = window.prompt("Enter note text", defaultNote);
-      if (noteBody === null) return;
-      const text = String(noteBody || "").trim();
-      if (!text) {
-        setStatus("Note text cannot be empty.");
-        return;
-      }
-
-      const result = await createHubSpotNotes([recordId], text);
-      if (!result.ok) {
-        setStatus(result.error || "Could not create note.");
-        return;
-      }
-
-      setStatus("Note logged.");
+      openNotesDialog(contact, recordId);
     });
   });
 
@@ -402,6 +400,101 @@ function updateExportActionsVisibility() {
   updateStickyHeadOffset();
 }
 
+function renderNotesHistory() {
+  if (!notesListEl) return;
+
+  if (notesDialogState.loading) {
+    notesListEl.innerHTML = "<div class='notes-empty'>Loading notes...</div>";
+    return;
+  }
+
+  if (!notesDialogState.notes.length) {
+    notesListEl.innerHTML = "<div class='notes-empty'>No notes found yet for this contact.</div>";
+    return;
+  }
+
+  notesListEl.innerHTML = notesDialogState.notes.map((note) => `<div class='note-item'>${escapeHtml(note)}</div>`).join("");
+}
+
+function setNotesDialogBusy(busy) {
+  if (saveNoteBtn) saveNoteBtn.disabled = !!busy;
+  if (notesTextInput) notesTextInput.disabled = !!busy;
+}
+
+function openNotesDialog(contact, recordId) {
+  if (!notesOverlay) return;
+
+  notesDialogState = {
+    recordId: String(recordId || ""),
+    contactName: getContactDisplayName(contact),
+    notes: [],
+    loading: true
+  };
+
+  if (notesTitleEl) notesTitleEl.textContent = `Notes - ${notesDialogState.contactName}`;
+  if (notesTextInput) notesTextInput.value = settings.noteTemplate || DEFAULT_NOTE_TEXT;
+
+  setNotesDialogBusy(false);
+  renderNotesHistory();
+  notesOverlay.classList.add("open");
+  void loadNotesForDialog();
+}
+
+function closeNotesDialog() {
+  if (!notesOverlay) return;
+  notesOverlay.classList.remove("open");
+  notesLoadToken += 1;
+}
+
+async function loadNotesForDialog() {
+  const currentToken = ++notesLoadToken;
+  notesDialogState.loading = true;
+  renderNotesHistory();
+
+  try {
+    const notes = await getHubSpotNotesForRecord(notesDialogState.recordId);
+    if (currentToken !== notesLoadToken) return;
+    notesDialogState.notes = notes;
+    notesDialogState.loading = false;
+    renderNotesHistory();
+  } catch (error) {
+    if (currentToken !== notesLoadToken) return;
+    notesDialogState.notes = [];
+    notesDialogState.loading = false;
+    if (notesListEl) {
+      notesListEl.innerHTML = `<div class='notes-empty'>Could not load notes. ${escapeHtml(String(error || ""))}</div>`;
+    }
+  }
+}
+
+async function saveNoteFromDialog() {
+  const recordId = String(notesDialogState.recordId || "").replace(/\D/g, "");
+  if (!recordId) {
+    setStatus("Could not find Record ID for this row.");
+    return;
+  }
+
+  const text = String(notesTextInput?.value || "").trim();
+  if (!text) {
+    setStatus("Note text cannot be empty.");
+    return;
+  }
+
+  setNotesDialogBusy(true);
+  const result = await createHubSpotNotes([recordId], text);
+  setNotesDialogBusy(false);
+
+  if (!result.ok) {
+    setStatus(result.error || "Could not create note.");
+    return;
+  }
+
+  notesDialogState.notes = [text, ...notesDialogState.notes];
+  renderNotesHistory();
+  if (notesTextInput) notesTextInput.value = settings.noteTemplate || DEFAULT_NOTE_TEXT;
+  setStatus("Note logged.");
+}
+
 function buildCsvRows(contacts) {
   const visibleCols = getVisibleColumns();
   const headers = visibleCols.map((c) => c.label);
@@ -446,10 +539,21 @@ function findEmailColumn() {
   return currentColumns.find((c) => /email/i.test(c.label) || /^email(_\d+)?$/i.test(c.id)) || null;
 }
 
+function findNameColumn() {
+  return currentColumns.find((c) => /name/i.test(c.label) || /^name(_\d+)?$/i.test(c.id)) || null;
+}
+
 function findRecordIdColumn() {
   return (
     currentColumns.find((c) => /record\s*id/i.test(c.label) || /^(record_id|recordid|hs_object_id|hs_objectid)$/i.test(c.id)) || null
   );
+}
+
+function getContactDisplayName(contact) {
+  const nameColumn = findNameColumn();
+  if (!nameColumn) return "Contact";
+  const value = String(contact?.values?.[nameColumn.id] || "").trim();
+  return value || "Contact";
 }
 
 function getRecordIdForContact(contact) {
@@ -536,7 +640,26 @@ async function sendCreateNoteMessage(tabId, noteBody) {
   throw new Error(lastError || "Could not reach note automation on HubSpot tab.");
 }
 
-async function createSingleHubSpotNote(recordId, noteBody, portalId) {
+async function sendGetNotesMessage(tabId) {
+  let lastError = "";
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: "GET_NOTES_ON_PAGE",
+        limit: 25
+      });
+      if (response?.ok) return response;
+      lastError = String(response?.error || "Unknown note read error.");
+    } catch (error) {
+      lastError = String(error);
+    }
+    await sleep(700);
+  }
+
+  throw new Error(lastError || "Could not read notes from HubSpot tab.");
+}
+
+async function withContactTab(recordId, portalId, work) {
   const cleanId = String(recordId || "").replace(/\D/g, "");
   if (!cleanId) {
     throw new Error("Invalid Record ID.");
@@ -550,8 +673,8 @@ async function createSingleHubSpotNote(recordId, noteBody, portalId) {
 
   try {
     await waitForTabComplete(tab.id);
-    await sleep(900);
-    await sendCreateNoteMessage(tab.id, noteBody);
+    await sleep(1200);
+    return await work(tab.id);
   } finally {
     try {
       await chrome.tabs.remove(tab.id);
@@ -559,6 +682,20 @@ async function createSingleHubSpotNote(recordId, noteBody, portalId) {
       // Ignore tab close failures.
     }
   }
+}
+
+async function createSingleHubSpotNote(recordId, noteBody, portalId) {
+  return withContactTab(recordId, portalId, async (tabId) => {
+    await sendCreateNoteMessage(tabId, noteBody);
+    return { ok: true };
+  });
+}
+
+async function readSingleHubSpotNotes(recordId, portalId) {
+  return withContactTab(recordId, portalId, async (tabId) => {
+    const response = await sendGetNotesMessage(tabId);
+    return Array.isArray(response?.notes) ? response.notes : [];
+  });
 }
 
 async function createHubSpotNotes(recordIds, noteBody) {
@@ -586,6 +723,25 @@ async function createHubSpotNotes(recordIds, noteBody) {
   }
 
   return { ok: true, created, failed };
+}
+
+async function getHubSpotNotesForRecord(recordId) {
+  const cleanId = String(recordId || "").replace(/\D/g, "");
+  if (!cleanId) {
+    throw new Error("Invalid Record ID.");
+  }
+
+  const hubSpotTab = await findHubSpotTab();
+  if (!hubSpotTab || typeof hubSpotTab.id !== "number") {
+    throw new Error("Open a HubSpot tab (app.hubspot.com), refresh it, and try again.");
+  }
+
+  const portalId = await getPortalId(hubSpotTab);
+  if (!portalId) {
+    throw new Error("Could not detect HubSpot portal ID.");
+  }
+
+  return readSingleHubSpotNotes(cleanId, portalId);
 }
 
 async function copyTextToClipboard(text) {
@@ -719,7 +875,19 @@ saveSettingsBtn.addEventListener("click", saveSettings);
 settingsOverlay.addEventListener("click", (event) => {
   if (event.target === settingsOverlay) closeSettings();
 });
+if (notesOverlay) {
+  notesOverlay.addEventListener("click", (event) => {
+    if (event.target === notesOverlay) closeNotesDialog();
+  });
+}
 window.addEventListener("resize", updateStickyHeadOffset);
+if (closeNotesBtn) closeNotesBtn.addEventListener("click", closeNotesDialog);
+if (cancelNotesBtn) cancelNotesBtn.addEventListener("click", closeNotesDialog);
+if (saveNoteBtn) {
+  saveNoteBtn.addEventListener("click", () => {
+    void saveNoteFromDialog();
+  });
+}
 
 refreshBtn.addEventListener("click", loadContacts);
 csvSelectedBtn.addEventListener("click", exportCsvSelected);
