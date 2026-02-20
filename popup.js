@@ -17,11 +17,13 @@ const vcfSelectedBtn = document.getElementById("vcfSelectedBtn");
 const copyEmailBtn = document.getElementById("copyEmailBtn");
 
 const countryPrefixInput = document.getElementById("countryPrefixInput");
+const messageTemplateInput = document.getElementById("messageTemplateInput");
 const rowFilterInput = document.getElementById("rowFilterInput");
 
 const SETTINGS_KEY = "popupSettings";
 const DEFAULT_SETTINGS = {
   countryPrefix: "60",
+  messageTemplate: "",
   rowFilterWord: "",
   visibleColumns: {}
 };
@@ -287,6 +289,7 @@ function settingsFromForm() {
 
   return {
     countryPrefix: (countryPrefixInput.value || "").replace(/\D/g, "") || "60",
+    messageTemplate: String(messageTemplateInput?.value || "").trim(),
     rowFilterWord: String(rowFilterInput?.value || "")
       .replace(/\s+/g, " ")
       .trim(),
@@ -296,6 +299,7 @@ function settingsFromForm() {
 
 function fillSettingsForm() {
   countryPrefixInput.value = settings.countryPrefix;
+  if (messageTemplateInput) messageTemplateInput.value = settings.messageTemplate || "";
   if (rowFilterInput) rowFilterInput.value = settings.rowFilterWord || "";
   renderColumnChecks();
 }
@@ -482,7 +486,8 @@ async function loadContacts() {
 
     const response = await chrome.tabs.sendMessage(tab.id, {
       type: "GET_CONTACTS",
-      countryPrefix: settings.countryPrefix
+      countryPrefix: settings.countryPrefix,
+      messageText: settings.messageTemplate
     });
 
     if (!response || !response.ok) {

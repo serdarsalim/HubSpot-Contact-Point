@@ -399,6 +399,18 @@
         font-size: 14px;
       }
 
+      .field textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 80px;
+      }
+
       .checks {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -461,6 +473,11 @@
         <div class="field">
           <label for="countryPrefixInput">Default country prefix (digits only)</label>
           <input id="countryPrefixInput" type="text" placeholder="60" />
+        </div>
+
+        <div class="field">
+          <label for="messageTemplateInput">Default WhatsApp message (prefilled)</label>
+          <textarea id="messageTemplateInput" placeholder="Hi, I am reaching out regarding..."></textarea>
         </div>
 
         <div class="field">

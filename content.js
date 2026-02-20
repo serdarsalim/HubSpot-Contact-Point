@@ -128,7 +128,7 @@
     return phoneCol ? phoneCol.id : null;
   }
 
-  function extractTableContacts(countryPrefix = DEFAULT_COUNTRY_CODE) {
+  function extractTableContacts(countryPrefix = DEFAULT_COUNTRY_CODE, messageText = "") {
     const headerInfo = findHeaderRow();
     if (!headerInfo) {
       return { columns: [], contacts: [], phoneColumnId: null };
@@ -180,7 +180,9 @@
       }
 
       const phoneDigits = phoneRaw ? normalizePhone(phoneRaw, countryPrefix) || "" : "";
-      const waUrl = phoneDigits ? `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number` : "";
+      const baseWaUrl = phoneDigits ? `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number` : "";
+      const text = cleanText(messageText || "");
+      const waUrl = baseWaUrl ? (text ? `${baseWaUrl}&text=${encodeURIComponent(text)}` : baseWaUrl) : "";
 
       const key = columns.map((c) => values[c.id] || "").join("|");
       if (seen.has(key)) continue;
@@ -203,7 +205,8 @@
 
     try {
       const countryPrefix = String(message.countryPrefix || DEFAULT_COUNTRY_CODE);
-      const payload = extractTableContacts(countryPrefix);
+      const messageText = String(message.messageText || "");
+      const payload = extractTableContacts(countryPrefix, messageText);
       sendResponse({ ok: true, ...payload });
     } catch (error) {
       sendResponse({ ok: false, error: String(error) });
