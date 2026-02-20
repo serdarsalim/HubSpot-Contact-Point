@@ -3,6 +3,9 @@
   "name": "HubSpot WhatsApp Contacts",
   "version": "2.0.0",
   "description": "Popup list of HubSpot contacts with WhatsApp-ready phone links.",
+  "permissions": [
+    "storage"
+  ],
   "action": {
     "default_title": "HubSpot WhatsApp Contacts",
     "default_popup": "popup.html"

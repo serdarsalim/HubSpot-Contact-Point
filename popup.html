@@ -4,49 +4,102 @@
     <meta charset="utf-8" />
     <title>HubSpot WhatsApp Contacts</title>
     <style>
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --line: #dce5ee;
+        --muted: #53657a;
+        --text: #1f2d3d;
+        --brand: #0b5cab;
+        --brand-soft: #e8f0fa;
+      }
+
       body {
         margin: 0;
         padding: 12px;
-        width: 760px;
-        max-height: 560px;
+        width: 860px;
+        max-height: 620px;
         overflow: auto;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f7f9fc;
-        color: #1f2d3d;
+        background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+        color: var(--text);
       }
 
-      h1 {
-        margin: 0 0 10px;
-        font-size: 16px;
-        color: #0b5cab;
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+
+      .topbar h1 {
+        margin: 0;
+        font-size: 20px;
+        color: var(--brand);
+      }
+
+      .icon-btn,
+      .btn {
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--text);
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .icon-btn {
+        padding: 8px 10px;
+      }
+
+      .btn {
+        padding: 8px 10px;
+      }
+
+      .btn.primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+      }
+
+      .icon-btn:hover,
+      .btn:hover {
+        filter: brightness(0.98);
       }
 
       .meta {
         margin: 0 0 10px;
-        font-size: 12px;
-        color: #52606d;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
       }
 
       .status {
         font-size: 13px;
-        padding: 8px;
-        background: #e8eff7;
-        border-radius: 8px;
+        padding: 8px 10px;
+        background: var(--brand-soft);
+        border-radius: 10px;
         margin-bottom: 10px;
       }
 
       .list {
         overflow-x: auto;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
       }
 
       table {
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
-        background: #ffffff;
-        border: 1px solid #dce5ee;
-        border-radius: 10px;
-        overflow: hidden;
       }
 
       th,
@@ -75,10 +128,16 @@
         border-bottom: none;
       }
 
+      td.sel,
+      th.sel {
+        width: 36px;
+        max-width: 36px;
+      }
+
       td.name {
         font-weight: 600;
-        width: 200px;
-        max-width: 200px;
+        width: 180px;
+        max-width: 180px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -91,12 +150,11 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        word-break: break-all;
       }
 
       td.phone {
-        width: 180px;
-        max-width: 180px;
+        width: 170px;
+        max-width: 170px;
         white-space: nowrap;
       }
 
@@ -111,20 +169,131 @@
       }
 
       td.possibility {
-        width: 110px;
-        max-width: 110px;
+        width: 120px;
+        max-width: 120px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         color: #334e68;
       }
+
+      .settings-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(13, 25, 38, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .settings-overlay.open {
+        display: flex;
+      }
+
+      .settings-card {
+        width: 440px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 20px 40px rgba(8, 30, 60, 0.15);
+      }
+
+      .settings-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .settings-head h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .field {
+        margin-bottom: 12px;
+      }
+
+      .field label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .field input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 14px;
+      }
+
+      .checks {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .check {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px;
+        font-size: 13px;
+      }
+
+      .settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 8px;
+      }
     </style>
   </head>
   <body>
-    <h1>HubSpot Contacts</h1>
+    <div class="topbar">
+      <button id="settingsBtn" class="icon-btn">Settings</button>
+      <h1>HubSpot Contacts</h1>
+    </div>
+
     <p class="meta">Click a phone number to open WhatsApp.</p>
+
+    <div class="actions">
+      <button id="refreshBtn" class="btn">Refresh</button>
+      <button id="csvSelectedBtn" class="btn">CSV Selected</button>
+      <button id="vcfSelectedBtn" class="btn">VCF Selected</button>
+    </div>
+
     <div id="status" class="status">Loading contacts...</div>
     <div id="list" class="list"></div>
+
+    <div id="settingsOverlay" class="settings-overlay">
+      <div class="settings-card">
+        <div class="settings-head">
+          <h2>Settings</h2>
+          <button id="closeSettingsBtn" class="icon-btn">Close</button>
+        </div>
+
+        <div class="field">
+          <label for="countryPrefixInput">Default country prefix (digits only)</label>
+          <input id="countryPrefixInput" type="text" placeholder="60" />
+        </div>
+
+        <div class="field">
+          <label>Columns to show</label>
+          <div id="columnChecks" class="checks"></div>
+        </div>
+
+        <div class="settings-actions">
+          <button id="cancelSettingsBtn" class="btn">Cancel</button>
+          <button id="saveSettingsBtn" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
     <script src="popup.js"></script>
   </body>
 </html>

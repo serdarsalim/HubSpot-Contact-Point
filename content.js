@@ -1,10 +1,17 @@
 (() => {
   const DEFAULT_COUNTRY_CODE = "60";
-  const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{6,}\d)/g;
-  const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const DAY_TIME_PATTERN = /\b(?:Today|Yesterday)\s+at\s+\d{1,2}:\d{2}\s+GMT[+-]\d+\b/gi;
-  const MONTH_TIME_PATTERN = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{1,2}:\d{2}\s+GMT[+-]\d+\b/gi;
-  const MONTH_NAME_PATTERN = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i;
+  const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{6,}\d)/;
+
+  function cleanText(text) {
+    return (text || "").replace(/\s+/g, " ").trim();
+  }
+
+  function slugify(input) {
+    return cleanText(input)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "column";
+  }
 
   function stripOuterNoise(text) {
     return cleanText((text || "").replace(/^[\s\-–—|]+|[\s\-–—|]+$/g, "").replace(/\s*--\s*--\s*/g, " "));
@@ -26,185 +33,173 @@
     return cleanText(tokens.join(" "));
   }
 
-  function extractNameAndPossibility(sourceText) {
-    let text = cleanText(sourceText || "");
-    if (!text) return { name: "Unknown", possibility: "-" };
-
-    text = cleanText(text.replace(EMAIL_PATTERN, "").replace(PHONE_PATTERN, ""));
-    const previewParts = text.split(/\bPreview\b/i).map(cleanText);
-    const nameCandidate = stripOuterNoise(previewParts[0] || "");
-    let possibility = "";
-
-    if (previewParts.length > 1) {
-      let remainder = cleanText(previewParts.slice(1).join(" "));
-      remainder = cleanText(remainder.replace(MONTH_TIME_PATTERN, " "));
-
-      const midMatch = remainder.match(/GMT[+-]\d+\s+(.+?)\s+(?:Today|Yesterday)\s+at\s+\d{1,2}:\d{2}\s+GMT[+-]\d+/i);
-      if (midMatch && midMatch[1]) {
-        possibility = stripOuterNoise(midMatch[1]);
-      }
-
-      if (!possibility) {
-        const endMatch = remainder.match(/(?:Today|Yesterday)\s+at\s+\d{1,2}:\d{2}\s+GMT[+-]\d+\s+(.+)$/i);
-        if (endMatch && endMatch[1]) {
-          possibility = stripOuterNoise(endMatch[1]);
-        }
-      }
-
-      if (!possibility) {
-        const keywordMatch = remainder.match(/\b(?:\d+\s*-\s*[A-Za-z\u00C0-\u024F]+(?:\s+[A-Za-z\u00C0-\u024F]+)*|N\/A\s+[A-Za-z\u00C0-\u024F]+(?:\s+[A-Za-z\u00C0-\u024F]+)*)\b/i);
-        if (keywordMatch && keywordMatch[0]) {
-          possibility = stripOuterNoise(keywordMatch[0]);
-        }
-      }
-    }
-
-    const fallback = cleanText(
-      text
-        .replace(/\bPreview\b/gi, " ")
-        .replace(DAY_TIME_PATTERN, " ")
-        .replace(MONTH_TIME_PATTERN, " ")
-    );
-
-    const rawName = nameCandidate || stripOuterNoise(fallback.split(" ").slice(0, 5).join(" ")) || "Unknown";
-    const name = removeLeadingInitials(rawName) || "Unknown";
-    return { name, possibility: possibility || "-" };
-  }
-
-  function normalizePhone(raw) {
-    const trimmed = cleanPhoneCandidate(raw);
-    const digits = trimmed.replace(/\D/g, "");
-    if (!digits) return null;
-
-    if (trimmed.startsWith("+")) return digits;
-    if (digits.startsWith(DEFAULT_COUNTRY_CODE)) return digits;
-    return `${DEFAULT_COUNTRY_CODE}${digits}`;
-  }
-
   function cleanPhoneCandidate(raw) {
     let text = cleanText(raw || "");
     if (!text) return "";
 
-    // If a month token appears inside the captured range, cut everything from there.
-    const monthMatch = text.match(MONTH_NAME_PATTERN);
-    if (monthMatch && typeof monthMatch.index === "number") {
-      text = cleanText(text.slice(0, monthMatch.index));
-    }
-
-    // HubSpot rows can append day numbers (e.g. "... 18") from dates next to phone.
-    // Remove trailing short numeric fragments after a space.
+    // Remove trailing short numeric fragments that can leak from adjacent date cells.
     text = text.replace(/\s+\d{1,3}$/, "");
     return cleanText(text);
   }
 
-  function cleanText(text) {
-    return (text || "").replace(/\s+/g, " ").trim();
+  function normalizePhone(raw, countryPrefix = DEFAULT_COUNTRY_CODE) {
+    const trimmed = cleanPhoneCandidate(raw);
+    const digits = trimmed.replace(/\D/g, "");
+    if (!digits) return null;
+
+    const prefix = String(countryPrefix || DEFAULT_COUNTRY_CODE).replace(/\D/g, "") || DEFAULT_COUNTRY_CODE;
+
+    if (trimmed.startsWith("+")) return digits;
+    if (digits.startsWith(prefix)) return digits;
+    return `${prefix}${digits}`;
   }
 
-  function getRowLikeElements() {
-    const rows = new Set();
-
-    document.querySelectorAll("tr, [role='row'], .private-table__row, .private-table-row").forEach((el) => {
-      rows.add(el);
-    });
-
-    // Fallback for card/list layouts.
-    document.querySelectorAll("li, article, [data-test-id*='record'], [class*='record']").forEach((el) => {
-      if (el.textContent && PHONE_PATTERN.test(el.textContent)) rows.add(el);
-      PHONE_PATTERN.lastIndex = 0;
-    });
-
-    return Array.from(rows);
-  }
-
-  function extractFromElement(element) {
-    const text = cleanText(element.innerText || element.textContent || "");
-    if (!text) return [];
-
-    const emails = Array.from(text.matchAll(EMAIL_PATTERN)).map((m) => m[0]);
-    const phonesRaw = Array.from(text.matchAll(PHONE_PATTERN)).map((m) => m[0]);
-
-    if (!phonesRaw.length) return [];
-
-    const phones = [];
-    const seenPhones = new Set();
-    for (const p of phonesRaw) {
-      const cleanedRaw = cleanPhoneCandidate(p);
-      const normalized = normalizePhone(cleanedRaw);
-      if (!normalized || seenPhones.has(normalized)) continue;
-      seenPhones.add(normalized);
-      phones.push({ raw: cleanedRaw, normalized });
-    }
-
-    if (!phones.length) return [];
-
-    const { name, possibility } = extractNameAndPossibility(text);
-
-    const primaryEmail = emails[0] || "";
-
-    return phones.map((phone) => ({
-      name,
-      email: primaryEmail,
-      phoneDisplay: phone.raw,
-      phoneDigits: phone.normalized,
-      possibility,
-      waUrl: `https://wa.me/${phone.normalized}`
-    }));
-  }
-
-  function dedupeContacts(contacts) {
-    const out = [];
-    const seen = new Set();
-
-    for (const c of contacts) {
-      const key = `${c.name}|${c.email}|${c.phoneDigits}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(c);
-    }
-
-    return out;
-  }
-
-  function collectContacts() {
-    const rows = getRowLikeElements();
-    const all = [];
+  function findHeaderRow() {
+    const rows = Array.from(document.querySelectorAll("thead tr, [role='row']"));
+    let best = null;
+    let bestScore = 0;
 
     for (const row of rows) {
-      all.push(...extractFromElement(row));
+      const headerCells = Array.from(row.querySelectorAll("th, [role='columnheader']"));
+      if (!headerCells.length) continue;
+
+      const labels = headerCells.map((cell) => cleanText(cell.innerText || cell.textContent || ""));
+      const score = labels.filter((label) => label && !/^[-|]+$/.test(label)).length;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = { row, headerCells, labels };
+      }
     }
 
-    // Fallback: collect phone links directly if row parsing misses some.
-    document.querySelectorAll("a[href^='tel:'], a[href*='wa.me/']").forEach((a) => {
-      const raw = cleanText(a.textContent || a.getAttribute("href") || "");
-      const normalized = normalizePhone(raw);
-      if (!normalized) return;
+    return bestScore >= 2 ? best : null;
+  }
 
-      const container = a.closest("tr, [role='row'], li, article, div") || a.parentElement;
-      const context = cleanText(container?.innerText || "");
-      const emailMatch = context.match(EMAIL_PATTERN);
-      const email = emailMatch ? emailMatch[0] : "";
-      const parsed = extractNameAndPossibility(context);
+  function buildColumns(headerInfo) {
+    const used = new Set();
+    const columns = [];
 
-      all.push({
-        name: parsed.name,
-        email,
-        phoneDisplay: raw,
-        phoneDigits: normalized,
-        possibility: parsed.possibility,
-        waUrl: `https://wa.me/${normalized}`
-      });
+    headerInfo.headerCells.forEach((cell, sourceIndex) => {
+      const rawLabel = cleanText(cell.innerText || cell.textContent || "");
+      if (!rawLabel) return;
+      if (/^[-|]+$/.test(rawLabel)) return;
+
+      let id = slugify(rawLabel);
+      let count = 2;
+      while (used.has(id)) {
+        id = `${slugify(rawLabel)}_${count}`;
+        count += 1;
+      }
+
+      used.add(id);
+      columns.push({ id, label: rawLabel, sourceIndex });
     });
 
-    return dedupeContacts(all);
+    return columns;
+  }
+
+  function getDataRows(headerInfo) {
+    const headerRow = headerInfo.row;
+    const table = headerRow.closest("table");
+
+    if (table) {
+      const bodyRows = Array.from(table.querySelectorAll("tbody tr"));
+      if (bodyRows.length) return bodyRows;
+    }
+
+    return Array.from(document.querySelectorAll("[role='row']")).filter((row) => {
+      if (row === headerRow) return false;
+      const hasHeaderCells = row.querySelectorAll("th, [role='columnheader']").length > 0;
+      if (hasHeaderCells) return false;
+      const cellCount = row.querySelectorAll("td, [role='gridcell']").length;
+      if (!cellCount) return false;
+      if (row.offsetParent === null) return false;
+      return true;
+    });
+  }
+
+  function findPhoneColumnId(columns) {
+    const phoneCol = columns.find((c) => /phone/i.test(c.label));
+    return phoneCol ? phoneCol.id : null;
+  }
+
+  function extractTableContacts(countryPrefix = DEFAULT_COUNTRY_CODE) {
+    const headerInfo = findHeaderRow();
+    if (!headerInfo) {
+      return { columns: [], contacts: [], phoneColumnId: null };
+    }
+
+    const columns = buildColumns(headerInfo);
+    if (!columns.length) {
+      return { columns: [], contacts: [], phoneColumnId: null };
+    }
+
+    const rows = getDataRows(headerInfo);
+    const phoneColumnId = findPhoneColumnId(columns);
+
+    const contacts = [];
+    const seen = new Set();
+
+    for (const row of rows) {
+      const cells = Array.from(row.querySelectorAll("td, [role='gridcell']"));
+      if (!cells.length) continue;
+
+      const values = {};
+      for (const col of columns) {
+        const cell = cells[col.sourceIndex] || null;
+        let value = cleanText(cell?.innerText || cell?.textContent || "");
+
+        if (!value) {
+          values[col.id] = "";
+          continue;
+        }
+
+        if (/^name$/i.test(col.label)) {
+          value = removeLeadingInitials(stripOuterNoise(value));
+        }
+
+        values[col.id] = value;
+      }
+
+      const hasAny = Object.values(values).some(Boolean);
+      if (!hasAny) continue;
+
+      let phoneRaw = "";
+      if (phoneColumnId) {
+        phoneRaw = cleanPhoneCandidate(values[phoneColumnId] || "");
+      }
+
+      if (!phoneRaw) {
+        const firstPhoneCell = Object.values(values).find((v) => PHONE_PATTERN.test(v));
+        phoneRaw = cleanPhoneCandidate(firstPhoneCell || "");
+      }
+
+      const phoneDigits = phoneRaw ? normalizePhone(phoneRaw, countryPrefix) || "" : "";
+      const waUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : "";
+
+      const key = columns.map((c) => values[c.id] || "").join("|");
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      contacts.push({
+        key,
+        values,
+        phoneDisplay: phoneRaw || values[phoneColumnId || ""] || "",
+        phoneDigits,
+        waUrl
+      });
+    }
+
+    return { columns, contacts, phoneColumnId };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || message.type !== "GET_CONTACTS") return;
 
     try {
-      const contacts = collectContacts();
-      sendResponse({ ok: true, contacts });
+      const countryPrefix = String(message.countryPrefix || DEFAULT_COUNTRY_CODE);
+      const payload = extractTableContacts(countryPrefix);
+      sendResponse({ ok: true, ...payload });
     } catch (error) {
       sendResponse({ ok: false, error: String(error) });
     }
