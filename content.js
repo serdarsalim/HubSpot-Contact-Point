@@ -180,7 +180,7 @@
       }
 
       const phoneDigits = phoneRaw ? normalizePhone(phoneRaw, countryPrefix) || "" : "";
-      const waUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : "";
+      const waUrl = phoneDigits ? `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number` : "";
 
       const key = columns.map((c) => values[c.id] || "").join("|");
       if (seen.has(key)) continue;
