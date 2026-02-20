@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "HubSpot WhatsApp Contacts",
+  "version": "2.0.0",
+  "description": "Popup list of HubSpot contacts with WhatsApp-ready phone links.",
+  "action": {
+    "default_title": "HubSpot WhatsApp Contacts",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://app.hubspot.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
