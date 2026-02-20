@@ -1,6 +1,7 @@
 const statusEl = document.getElementById("status");
 const statusTextEl = document.getElementById("statusText");
 const statusActionsEl = document.getElementById("statusActions");
+const stickyHeadEl = document.getElementById("stickyHead");
 const listEl = document.getElementById("list");
 
 const settingsBtn = document.getElementById("settingsBtn");
@@ -74,9 +75,17 @@ function escapeHtml(value) {
 function setStatus(message) {
   if (statusTextEl) {
     statusTextEl.textContent = message;
+    updateStickyHeadOffset();
     return;
   }
   statusEl.textContent = message;
+  updateStickyHeadOffset();
+}
+
+function updateStickyHeadOffset() {
+  if (!stickyHeadEl || !document?.documentElement?.style) return;
+  const stickyHeight = Math.ceil(stickyHeadEl.getBoundingClientRect().height);
+  document.documentElement.style.setProperty("--sticky-head-h", `${stickyHeight + 6}px`);
 }
 
 function contactKey(contact) {
@@ -181,11 +190,14 @@ function renderContacts() {
   setStatus(`Found ${filteredContacts.length} contact(s). Selected ${selectedKeys.size}.`);
 
   const allShownSelected = displayedContacts.length > 0 && displayedContacts.every((c) => selectedKeys.has(contactKey(c)));
+  const compactColumnLayout = visibleColumns.length <= 3;
 
   const headerHtml = visibleColumns
     .map(
-      (col) =>
-        `<th class='sortable ${columnClasses(col)}' data-sort-field='${escapeHtml(col.id)}' tabindex='0' aria-sort='${sortAria(col.id)}'>${escapeHtml(col.label)}${sortIndicator(col.id)}</th>`
+      (col, index) => {
+        const sizeClass = compactColumnLayout ? (index === visibleColumns.length - 1 ? "col-elastic" : "col-fixed") : "col-fluid";
+        return `<th class='sortable ${columnClasses(col)} ${sizeClass}' data-sort-field='${escapeHtml(col.id)}' tabindex='0' aria-sort='${sortAria(col.id)}'>${escapeHtml(col.label)}${sortIndicator(col.id)}</th>`;
+      }
     )
     .join("");
 
@@ -195,9 +207,10 @@ function renderContacts() {
       const checked = selectedKeys.has(key) ? "checked" : "";
 
       const cellsHtml = visibleColumns
-        .map((col) => {
+        .map((col, index) => {
           const value = contact.values?.[col.id] || "-";
-          const css = columnClasses(col);
+          const sizeClass = compactColumnLayout ? (index === visibleColumns.length - 1 ? "col-elastic" : "col-fixed") : "col-fluid";
+          const css = `${columnClasses(col)} ${sizeClass}`;
 
           if (col.id === phoneColumnId && contact.waUrl) {
             return `<td class='${css}'><a href='${escapeHtml(contact.waUrl)}' target='_blank' rel='noopener noreferrer'>${escapeHtml(value)}</a></td>`;
@@ -343,6 +356,7 @@ function getSelectedContacts() {
 function updateExportActionsVisibility() {
   const hasSelection = getSelectedContacts().length > 0;
   if (statusActionsEl) statusActionsEl.hidden = !hasSelection;
+  updateStickyHeadOffset();
 }
 
 function buildCsvRows(contacts) {
@@ -498,6 +512,7 @@ saveSettingsBtn.addEventListener("click", saveSettings);
 settingsOverlay.addEventListener("click", (event) => {
   if (event.target === settingsOverlay) closeSettings();
 });
+window.addEventListener("resize", updateStickyHeadOffset);
 
 refreshBtn.addEventListener("click", loadContacts);
 csvSelectedBtn.addEventListener("click", exportCsvSelected);
@@ -509,6 +524,7 @@ copyEmailBtn.addEventListener("click", () => {
 async function init() {
   await loadSettings();
   await loadContacts();
+  updateStickyHeadOffset();
 }
 
 init();
