@@ -14,14 +14,36 @@
         --brand-soft: #e8f0fa;
       }
 
+      html {
+        margin: 0;
+        width: 860px;
+        max-height: 620px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #a6bacf transparent;
+      }
+
+      html::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      html::-webkit-scrollbar-thumb {
+        background: #a6bacf;
+        border-radius: 999px;
+      }
+
+      html::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
       body {
         margin: 0;
         padding: 12px;
-        width: 860px;
-        max-height: 620px;
+        width: 100%;
         box-sizing: border-box;
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow: visible;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
         color: var(--text);
@@ -129,17 +151,16 @@
       }
 
       .list {
-        overflow-x: auto;
+        overflow: visible;
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 12px;
       }
 
       table {
-        width: max-content;
-        min-width: 100%;
+        width: 100%;
         border-collapse: collapse;
-        table-layout: auto;
+        table-layout: fixed;
       }
 
       th,
@@ -154,6 +175,8 @@
       th.plain,
       td.plain {
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       th {
