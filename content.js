@@ -26,6 +26,15 @@
     return (text || "").replace(/\s+/g, " ").trim();
   }
 
+  function escapeHtml(value) {
+    return String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
   function slugify(input) {
     return cleanText(input)
       .toLowerCase()
@@ -616,24 +625,86 @@
     return bestScore > 5 ? best : null;
   }
 
+  function getElementHint(el) {
+    if (!el) return "";
+    const parts = [
+      el.getAttribute?.("placeholder"),
+      el.getAttribute?.("aria-label"),
+      el.getAttribute?.("name"),
+      el.getAttribute?.("id"),
+      el.getAttribute?.("title"),
+      el.getAttribute?.("data-selenium-test"),
+      el.getAttribute?.("data-test-id"),
+      el.getAttribute?.("data-testid")
+    ]
+      .map((v) => cleanText(v || ""))
+      .filter(Boolean);
+
+    const labelledBy = cleanText(el.getAttribute?.("aria-labelledby") || "");
+    if (labelledBy) {
+      for (const id of labelledBy.split(/\s+/)) {
+        const labelNode = document.getElementById(id);
+        if (labelNode) parts.push(elementText(labelNode));
+      }
+    }
+
+    const elementId = cleanText(el.id || "");
+    if (elementId) {
+      try {
+        const linkedLabel = document.querySelector(`label[for="${CSS.escape(elementId)}"]`);
+        if (linkedLabel) parts.push(elementText(linkedLabel));
+      } catch (_error) {
+        // Ignore malformed IDs.
+      }
+    }
+
+    const parentLabel = el.closest?.("label");
+    if (parentLabel) parts.push(elementText(parentLabel));
+
+    const fieldRoot = el.closest?.("[data-field], [data-field-name], [data-selenium-test], [data-test-id], [data-testid]");
+    if (fieldRoot && fieldRoot !== el) {
+      parts.push(cleanText(fieldRoot.getAttribute("data-field-name") || ""));
+      const labelInRoot = fieldRoot.querySelector?.("label");
+      if (labelInRoot) parts.push(elementText(labelInRoot));
+    }
+
+    return cleanText(parts.join(" ")).toLowerCase();
+  }
+
+  function isRecipientFieldHint(hint) {
+    const text = String(hint || "").toLowerCase();
+    return /\b(to|recipient|recipients|from|cc|bcc)\b/.test(text);
+  }
+
   function findSubjectInput(dialog) {
-    const candidates = Array.from(dialog.querySelectorAll("input, textarea, [role='textbox']")).filter((el) => isVisible(el));
+    const candidates = Array.from(dialog.querySelectorAll("input, textarea, [role='textbox']")).filter(
+      (el) => isVisible(el) && !el.hasAttribute("disabled") && !el.hasAttribute("readonly")
+    );
     if (!candidates.length) return null;
 
     let best = null;
     let bestScore = -Infinity;
 
     for (const el of candidates) {
-      const hint = cleanText(
-        el.getAttribute("placeholder") || el.getAttribute("aria-label") || el.getAttribute("name") || el.getAttribute("id") || ""
-      ).toLowerCase();
+      const hint = getElementHint(el);
+      const tag = String(el.tagName || "").toLowerCase();
+      const type = String(el.getAttribute("type") || "").toLowerCase();
       let score = 0;
-      if (hint.includes("subject")) score += 12;
-      if (hint.includes("title")) score += 3;
-      if (hint.includes("search")) score -= 8;
-      if (String(el.tagName).toLowerCase() === "input") score += 2;
+
+      if (hint.includes("subject")) score += 28;
+      if (hint.includes("email subject")) score += 12;
+      if (hint === "subject") score += 8;
+      if (hint.includes("title")) score += 4;
+      if (isRecipientFieldHint(hint)) score -= 40;
+      if (hint.includes("search")) score -= 18;
+      if (type === "email") score -= 20;
+      if (tag === "input") score += 3;
+      if (!type || type === "text") score += 2;
+      if (el.getAttribute("contenteditable") === "true") score -= 10;
+
       const rect = el.getBoundingClientRect();
-      if (rect.height < 56) score += 1;
+      if (rect.height <= 64) score += 2;
+      if (rect.width >= 220) score += 1;
 
       if (score > bestScore) {
         bestScore = score;
@@ -641,28 +712,63 @@
       }
     }
 
-    return bestScore > 2 ? best : null;
+    return bestScore >= 10 ? best : null;
+  }
+
+  function getIframeEditorElement(iframe) {
+    if (!(iframe instanceof HTMLIFrameElement)) return null;
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc) return null;
+
+      if (doc.body && doc.body.isContentEditable) {
+        return doc.body;
+      }
+
+      const candidates = Array.from(doc.querySelectorAll("[contenteditable='true'], textarea, [role='textbox']")).filter((el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        const style = doc.defaultView?.getComputedStyle(el);
+        if (!style) return true;
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        return true;
+      });
+      return candidates[0] || null;
+    } catch (_error) {
+      return null;
+    }
   }
 
   function findBodyEditor(dialog) {
-    const candidates = Array.from(dialog.querySelectorAll("[contenteditable='true'], textarea, [role='textbox']")).filter((el) => isVisible(el));
+    const candidates = Array.from(dialog.querySelectorAll("[contenteditable='true'], textarea, [role='textbox'], iframe")).filter((el) =>
+      isVisible(el)
+    );
     if (!candidates.length) return null;
 
     let best = null;
     let bestScore = -Infinity;
     for (const el of candidates) {
-      const hint = cleanText(
-        el.getAttribute("placeholder") || el.getAttribute("aria-label") || el.getAttribute("name") || el.getAttribute("id") || ""
-      ).toLowerCase();
+      const hint = getElementHint(el);
+      const tag = String(el.tagName || "").toLowerCase();
 
       let score = 0;
-      if (hint.includes("message") || hint.includes("body") || hint.includes("email")) score += 8;
-      if (hint.includes("subject")) score -= 10;
-      if (hint.includes("search")) score -= 8;
-      if (el.closest("[role='toolbar']")) score -= 10;
-      if (el.getAttribute("contenteditable") === "true") score += 5;
+      if (hint.includes("message") || hint.includes("body") || hint.includes("email") || hint.includes("content")) score += 12;
+      if (hint.includes("rich text") || hint.includes("editor")) score += 8;
+      if (hint.includes("subject")) score -= 20;
+      if (isRecipientFieldHint(hint)) score -= 24;
+      if (hint.includes("search")) score -= 14;
+      if (el.closest("[role='toolbar']")) score -= 16;
+
+      if (tag === "iframe") {
+        if (getIframeEditorElement(el)) score += 12;
+        else score -= 12;
+      } else {
+        if (el.getAttribute("contenteditable") === "true") score += 8;
+        if (tag === "textarea") score += 4;
+      }
+
       const rect = el.getBoundingClientRect();
-      if (rect.height >= 120) score += 4;
+      if (rect.height >= 120) score += 8;
+      if (rect.width >= 280) score += 2;
 
       if (score > bestScore) {
         bestScore = score;
@@ -670,7 +776,7 @@
       }
     }
 
-    return bestScore > 2 ? best : null;
+    return bestScore >= 8 ? best : null;
   }
 
   function setInputValue(input, value) {
@@ -678,12 +784,25 @@
     input.focus();
 
     if (input.tagName === "INPUT" || input.tagName === "TEXTAREA") {
-      input.value = next;
+      const proto = input.tagName === "TEXTAREA" ? window.HTMLTextAreaElement?.prototype : window.HTMLInputElement?.prototype;
+      const setter = proto ? Object.getOwnPropertyDescriptor(proto, "value")?.set : null;
+      if (typeof setter === "function") {
+        setter.call(input, next);
+      } else {
+        input.value = next;
+      }
     } else {
       input.textContent = next;
     }
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
+    dispatchInputLikeEvents(input);
+  }
+
+  function dispatchInputLikeEvents(element) {
+    if (!element) return;
+    const ownerWin = element.ownerDocument?.defaultView || window;
+    const EventCtor = ownerWin.Event || Event;
+    element.dispatchEvent(new EventCtor("input", { bubbles: true }));
+    element.dispatchEvent(new EventCtor("change", { bubbles: true }));
   }
 
   function htmlToPlainText(value) {
@@ -714,59 +833,43 @@
   function prependEditorHtml(editor, html) {
     const value = sanitizeEditorHtml(html);
     if (!value) return false;
-    editor.focus();
+    const target = editor instanceof HTMLIFrameElement ? getIframeEditorElement(editor) : editor;
+    if (!target) return false;
+    target.focus();
 
-    if (editor.tagName === "TEXTAREA" || editor.tagName === "INPUT") {
+    if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") {
       const textValue = htmlToPlainText(value);
       if (!textValue) return false;
-      const current = String(editor.value || "");
-      editor.value = current ? `${textValue}\n\n${current}` : textValue;
-      editor.dispatchEvent(new Event("input", { bubbles: true }));
-      editor.dispatchEvent(new Event("change", { bubbles: true }));
+      const current = String(target.value || "");
+      target.value = current ? `${textValue}\n\n${current}` : textValue;
+      dispatchInputLikeEvents(target);
       return true;
     }
 
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(true);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    const template = document.createElement("template");
-    template.innerHTML = `${value}<p><br></p>`;
-    range.insertNode(template.content);
-    editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertFromPaste" }));
-    editor.dispatchEvent(new Event("change", { bubbles: true }));
+    const currentHtml = String(target.innerHTML || "");
+    target.innerHTML = currentHtml ? `${value}<p><br></p>${currentHtml}` : value;
+    dispatchInputLikeEvents(target);
     return true;
   }
 
   function prependEditorText(editor, text) {
     const value = String(text || "").trim();
     if (!value) return false;
-    editor.focus();
+    const target = editor instanceof HTMLIFrameElement ? getIframeEditorElement(editor) : editor;
+    if (!target) return false;
+    target.focus();
 
-    if (editor.tagName === "TEXTAREA" || editor.tagName === "INPUT") {
-      const current = String(editor.value || "");
-      editor.value = current ? `${value}\n\n${current}` : value;
-      editor.dispatchEvent(new Event("input", { bubbles: true }));
-      editor.dispatchEvent(new Event("change", { bubbles: true }));
+    if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") {
+      const current = String(target.value || "");
+      target.value = current ? `${value}\n\n${current}` : value;
+      dispatchInputLikeEvents(target);
       return true;
     }
 
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(true);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    const inserted = `${value}\n\n`;
-    if (!document.execCommand("insertText", false, inserted)) {
-      range.insertNode(document.createTextNode(inserted));
-    }
-    editor.dispatchEvent(new InputEvent("input", { bubbles: true, data: inserted, inputType: "insertText" }));
-    editor.dispatchEvent(new Event("change", { bubbles: true }));
+    const escaped = escapeHtml(value).replace(/\r\n/g, "\n").replace(/\n/g, "<br>");
+    const currentHtml = String(target.innerHTML || "");
+    target.innerHTML = currentHtml ? `${escaped}<p><br></p>${currentHtml}` : escaped;
+    dispatchInputLikeEvents(target);
     return true;
   }
 
