@@ -42,6 +42,14 @@
   }
 
   if (dom.cancelEmailTemplatePickBtn) dom.cancelEmailTemplatePickBtn.addEventListener("click", App.closeEmailTemplatePicker);
+  if (dom.emailTemplatePickSearchInput) {
+    dom.emailTemplatePickSearchInput.addEventListener("input", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      state.emailTemplatePickState.query = String(target.value || "");
+      App.renderEmailTemplatePickerOptions();
+    });
+  }
   if (dom.cancelTemplateImportBtn) dom.cancelTemplateImportBtn.addEventListener("click", App.closeTemplateImportReview);
   if (dom.applyTemplateImportBtn) dom.applyTemplateImportBtn.addEventListener("click", () => void App.applyTemplateImport());
 

@@ -4,6 +4,7 @@
   const MT = App.messageTypes;
   const timing = App.timing.popup;
   const BODY_EDITOR_ID = "emailTemplateBodyInput";
+  const TEMPLATE_PICK_VISIBLE_MAX = 5;
   const TINYMCE_TOOLBAR_ORDER = [
     "blocks",
     "bold italic underline strikethrough",
@@ -335,12 +336,23 @@
   function renderEmailTemplatePickerOptions() {
     if (!dom.emailTemplatePickList) return;
     const templates = App.normalizeEmailTemplates(state.settings.emailTemplates);
+    const query = String(state.emailTemplatePickState?.query || "")
+      .trim()
+      .toLowerCase();
+    const matchingTemplates = query
+      ? templates.filter((template) => String(template?.name || "").toLowerCase().includes(query))
+      : templates;
+    const visibleTemplates = matchingTemplates.slice(0, TEMPLATE_PICK_VISIBLE_MAX);
     if (!templates.length) {
       dom.emailTemplatePickList.innerHTML = "<div class='email-template-empty'>No templates found. Add one via the email icon.</div>";
       return;
     }
+    if (!matchingTemplates.length) {
+      dom.emailTemplatePickList.innerHTML = "<div class='email-template-empty'>No templates match that title.</div>";
+      return;
+    }
 
-    dom.emailTemplatePickList.innerHTML = templates
+    dom.emailTemplatePickList.innerHTML = visibleTemplates
       .map((template) => {
         const preview = templatePreviewText(template);
         return `
@@ -357,18 +369,24 @@
     if (!dom.emailTemplatePickOverlay) return;
     state.emailTemplatePickState = {
       key: String(key || ""),
-      contact: contact || null
+      contact: contact || null,
+      query: ""
     };
     if (dom.emailTemplatePickTitle) {
       dom.emailTemplatePickTitle.textContent = `Select Template - ${App.getContactDisplayName(contact)}`;
     }
+    if (dom.emailTemplatePickSearchInput) {
+      dom.emailTemplatePickSearchInput.value = "";
+    }
     renderEmailTemplatePickerOptions();
     dom.emailTemplatePickOverlay.classList.add("open");
+    dom.emailTemplatePickSearchInput?.focus();
   }
 
   function closeEmailTemplatePicker() {
     if (dom.emailTemplatePickOverlay) dom.emailTemplatePickOverlay.classList.remove("open");
-    state.emailTemplatePickState = { key: "", contact: null };
+    state.emailTemplatePickState = { key: "", contact: null, query: "" };
+    if (dom.emailTemplatePickSearchInput) dom.emailTemplatePickSearchInput.value = "";
   }
 
   async function applyEmailTemplateToContact(contact, key, template) {

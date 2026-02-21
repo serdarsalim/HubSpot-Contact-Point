@@ -65,6 +65,7 @@
     cancelNotesBtn: document.getElementById("cancelNotesBtn"),
     saveNoteBtn: document.getElementById("saveNoteBtn"),
     emailTemplatePickTitle: document.getElementById("emailTemplatePickTitle"),
+    emailTemplatePickSearchInput: document.getElementById("emailTemplatePickSearchInput"),
     emailTemplatePickList: document.getElementById("emailTemplatePickList"),
     cancelEmailTemplatePickBtn: document.getElementById("cancelEmailTemplatePickBtn"),
 
@@ -130,7 +131,8 @@
     syncingEmailTemplateForm: false,
     emailTemplatePickState: {
       key: "",
-      contact: null
+      contact: null,
+      query: ""
     }
   };
 

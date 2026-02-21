@@ -339,6 +339,10 @@
         border-bottom: none;
       }
 
+      tbody tr:hover td {
+        background: #f2f8ff;
+      }
+
       td.sel,
       th.sel {
         width: 28px;
@@ -983,12 +987,38 @@
       }
 
       .email-template-pick-list {
-        max-height: 320px;
+        height: 410px;
+        max-height: 410px;
         overflow-y: auto;
         border: 1px solid #e5edf5;
         border-radius: 10px;
         background: #f8fbff;
         padding: 8px;
+      }
+
+      .email-template-pick-search {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 10px;
+        border: 1px solid #c9d9eb;
+        border-radius: 12px;
+        padding: 11px 14px;
+        background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+        color: #1f2d3d;
+        font-size: 15px;
+        font-weight: 500;
+        outline: none;
+        transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+      }
+
+      .email-template-pick-search::placeholder {
+        color: #6e8197;
+      }
+
+      .email-template-pick-search:focus {
+        border-color: #84acd7;
+        box-shadow: 0 0 0 3px rgba(11, 102, 195, 0.16);
+        background: #fff;
       }
 
       .email-template-pick-item {
@@ -1219,6 +1249,13 @@
         <div class="settings-head">
           <h2 id="emailTemplatePickTitle">Select Email Template</h2>
         </div>
+        <input
+          id="emailTemplatePickSearchInput"
+          class="email-template-pick-search"
+          type="text"
+          placeholder="Search template title..."
+          autocomplete="off"
+        />
         <div id="emailTemplatePickList" class="email-template-pick-list"></div>
         <div class="settings-actions">
           <button id="cancelEmailTemplatePickBtn" class="btn" type="button">Cancel</button>
