@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ContactPilot",
+  "name": "Contact Point",
   "version": "2.0.0",
   "description": "Contact workflow sidecar with WhatsApp links, notes, and email templates.",
   "permissions": [
@@ -19,7 +19,7 @@
       "32": "icons/icon-32.png",
       "48": "icons/icon-48.png"
     },
-    "default_title": "ContactPilot"
+    "default_title": "Contact Point"
   },
   "background": {
     "service_worker": "background.js"

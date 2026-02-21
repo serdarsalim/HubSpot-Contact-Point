@@ -1,4 +1,4 @@
-# HubSpot ContactPilot
+# HubSpot Contact Point
 
 A Chrome extension that adds fast outreach workflows on top of HubSpot contact views.
 
@@ -22,7 +22,7 @@ A Chrome extension that adds fast outreach workflows on top of HubSpot contact v
 3. Click **Load unpacked**
 4. Select this folder (`wa-extension`)
 5. Open a HubSpot contacts page (`https://app.hubspot.com/*`)
-6. Click the extension icon to open ContactPilot
+6. Click the extension icon to open Contact Point
 
 ## Permissions
 

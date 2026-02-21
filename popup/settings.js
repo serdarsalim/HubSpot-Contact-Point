@@ -342,7 +342,7 @@
     const now = new Date();
     const pad = (num) => String(num).padStart(2, "0");
     const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
-    return `contactpilot-personal-templates-${stamp}.json`;
+    return `contact-point-personal-templates-${stamp}.json`;
   }
 
   function downloadJson(filename, payload) {
