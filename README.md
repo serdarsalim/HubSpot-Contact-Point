@@ -14,6 +14,9 @@ A Chrome extension that adds fast outreach workflows on top of HubSpot contact v
   - Export selected contacts to VCF
   - Copy selected emails
 - Includes a dedicated full-page Email Templates workspace
+- Includes dark mode support for:
+  - Contact Point extension UI
+  - HubSpot page theming (applied from the extension toggle)
 
 ## Quick Start (Local Install)
 
@@ -34,6 +37,7 @@ A Chrome extension that adds fast outreach workflows on top of HubSpot contact v
 
 - The extension uses UI automation heuristics on HubSpot pages. If HubSpot changes DOM structure, selectors may require updates.
 - Email flow does **not** auto-send; it fills draft content only.
+- HubSpot dark mode is powered by the bundled Dark Reader engine (MIT licensed).
 
 ## License
 
