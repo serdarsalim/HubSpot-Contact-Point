@@ -26,6 +26,14 @@
     return (text || "").replace(/\s+/g, " ").trim();
   }
 
+  function hasMeaningfulCellValue(value) {
+    const text = cleanText(value);
+    if (!text) return false;
+    if (/^[-–—|_]+$/.test(text)) return false;
+    const compact = text.replace(/[\s\-–—|_]+/g, "");
+    return compact.length > 0;
+  }
+
   function escapeHtml(value) {
     return String(value || "")
       .replaceAll("&", "&amp;")
@@ -202,7 +210,7 @@
 
   function buildContactFromValues(row, values, columns, phoneColumnId, nameColumnId, countryPrefix, messageText) {
     if (!values) return null;
-    const hasAny = Object.values(values).some(Boolean);
+    const hasAny = Object.values(values).some((value) => hasMeaningfulCellValue(value));
     if (!hasAny) return null;
 
     let phoneRaw = "";
