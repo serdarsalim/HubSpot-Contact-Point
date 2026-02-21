@@ -340,7 +340,11 @@
       .trim()
       .toLowerCase();
     const matchingTemplates = query
-      ? templates.filter((template) => String(template?.name || "").toLowerCase().includes(query))
+      ? templates.filter((template) => {
+          const name = String(template?.name || "").toLowerCase();
+          const subject = String(template?.subject || "").toLowerCase();
+          return name.includes(query) || subject.includes(query);
+        })
       : templates;
     const visibleTemplates = matchingTemplates.slice(0, TEMPLATE_PICK_VISIBLE_MAX);
     if (!templates.length) {
@@ -373,7 +377,7 @@
       query: ""
     };
     if (dom.emailTemplatePickTitle) {
-      dom.emailTemplatePickTitle.textContent = `Select Template - ${App.getContactDisplayName(contact)}`;
+      dom.emailTemplatePickTitle.textContent = `Choose Template for ${App.getContactDisplayName(contact)}`;
     }
     if (dom.emailTemplatePickSearchInput) {
       dom.emailTemplatePickSearchInput.value = "";
