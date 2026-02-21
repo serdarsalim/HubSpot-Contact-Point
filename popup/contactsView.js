@@ -60,7 +60,7 @@
 
     if (!filteredContacts.length) {
       if (state.currentContacts.length && App.getFilterWord()) {
-        App.setStatus("No contacts match the current filter word.");
+        App.setStatus("No contacts match the current filters.");
         return;
       }
       App.setStatus("No contacts with phone numbers found on this view.");

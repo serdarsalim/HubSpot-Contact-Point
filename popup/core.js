@@ -264,17 +264,24 @@
     return contact.key || state.currentColumns.map((col) => contact.values?.[col.id] || "").join("|");
   }
 
+  function getFilterWords() {
+    return String(state.settings.rowFilterWord || "")
+      .split(",")
+      .map((word) => word.trim().toLowerCase())
+      .filter((word) => word.length > 0);
+  }
+
   function getFilterWord() {
-    return String(state.settings.rowFilterWord || "").trim().toLowerCase();
+    return getFilterWords()[0] || "";
   }
 
   function getFilteredContacts(source = state.currentContacts) {
-    const filterWord = getFilterWord();
-    if (!filterWord) return [...source];
+    const filterWords = getFilterWords();
+    if (!filterWords.length) return [...source];
 
     return source.filter((contact) => {
       const rowText = Object.values(contact.values || {}).join(" ").toLowerCase();
-      return !rowText.includes(filterWord);
+      return !filterWords.some((word) => rowText.includes(word));
     });
   }
 
