@@ -63,6 +63,11 @@
 
     const csv = toCsv(buildCsvRows(contacts));
     downloadText("hubspot-contacts-selected.csv", csv, "text/csv;charset=utf-8");
+    if (typeof App.trackEvent === "function") {
+      App.trackEvent("export_csv", {
+        selected_count: contacts.length
+      });
+    }
   }
 
   function exportVcfSelected() {
@@ -74,6 +79,11 @@
 
     const vcf = toVcf(contacts);
     downloadText("hubspot-contacts-selected.vcf", vcf, "text/vcard;charset=utf-8");
+    if (typeof App.trackEvent === "function") {
+      App.trackEvent("export_vcf", {
+        selected_count: contacts.length
+      });
+    }
   }
 
   async function copyEmailSelected() {

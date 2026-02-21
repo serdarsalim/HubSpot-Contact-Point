@@ -97,6 +97,11 @@
     renderNotesHistory();
     if (dom.notesTextInput) dom.notesTextInput.value = state.settings.noteTemplate || "";
     App.setStatus("Note logged.");
+    if (typeof App.trackEvent === "function") {
+      App.trackEvent("note_created", {
+        note_length: text.length
+      });
+    }
   }
 
   Object.assign(App, {

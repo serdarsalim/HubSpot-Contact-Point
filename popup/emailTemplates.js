@@ -419,12 +419,25 @@
 
       if (!response?.ok) {
         App.setStatus(response?.error || "Opened contact, but could not apply email template.");
+        if (typeof App.trackEvent === "function") {
+          App.trackEvent("template_apply_failed", { reason: "hubspot_response_not_ok" });
+        }
         return;
       }
 
       App.setStatus(`Applied "${template.name}" for ${App.getContactDisplayName(contact)}.`);
+      if (typeof App.trackEvent === "function") {
+        App.trackEvent("template_applied", {
+          template_id: String(template.id || ""),
+          subject_length: subject.length,
+          body_length: bodyHtml.length
+        });
+      }
     } catch (_error) {
       App.setStatus("Could not apply email template on HubSpot tab.");
+      if (typeof App.trackEvent === "function") {
+        App.trackEvent("template_apply_failed", { reason: "exception" });
+      }
     }
   }
 

@@ -94,6 +94,9 @@
   });
 
   async function init() {
+    if (typeof App.initAnalytics === "function") {
+      await App.initAnalytics();
+    }
     await App.loadSettings();
     await App.loadContacts({ loadAll: true });
     App.updateStickyHeadOffset();

@@ -111,7 +111,7 @@
             const css = `${App.columnClasses(col)} ${sizeClass}`;
 
             if (col.id === state.phoneColumnId && contact.waUrl) {
-              return `<td class='${css}'><a href='${App.escapeHtml(contact.waUrl)}' target='_blank' rel='noopener noreferrer'>${App.escapeHtml(value)}</a></td>`;
+              return `<td class='${css}'><a class='row-wa-link' href='${App.escapeHtml(contact.waUrl)}' target='_blank' rel='noopener noreferrer'>${App.escapeHtml(value)}</a></td>`;
             }
 
             if (App.columnType(col) === "name") {
@@ -203,6 +203,15 @@
       });
     });
 
+    dom.listEl.querySelectorAll(".row-wa-link").forEach((link) => {
+      link.addEventListener("click", () => {
+        if (typeof App.trackEvent !== "function") return;
+        App.trackEvent("whatsapp_clicked", {
+          selected_count: state.selectedKeys.size
+        });
+      });
+    });
+
     const selectAllShown = document.getElementById("selectAllShown");
     if (selectAllShown) {
       selectAllShown.addEventListener("change", () => {
@@ -258,6 +267,16 @@
       state.selectedKeys = new Set();
       state.sortState = { field: null, direction: "asc" };
       renderContacts();
+      if (typeof App.trackEvent === "function") {
+        const filteredContacts = App.getFilteredContacts();
+        App.trackEvent("contacts_loaded", {
+          total_contacts: state.currentContacts.length,
+          visible_contacts: filteredContacts.length,
+          new_contacts: countNewContacts(filteredContacts),
+          column_count: state.currentColumns.length,
+          load_all: loadAll
+        });
+      }
     } catch (_error) {
       App.setStatus("Could not load contacts. Refresh HubSpot tab and retry.");
     } finally {
