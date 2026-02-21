@@ -108,11 +108,11 @@ Implemented message types:
   - Returns list of note text snippets
 
 - `APPLY_EMAIL_TEMPLATE_ON_PAGE`
-  - Input: `subject`, `body`
+  - Input: `subject`, `body`, `bodyHtml`
   - Fills already-open HubSpot email composer
 
 - `OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE`
-  - Input: `subject`, `body`
+  - Input: `subject`, `body`, `bodyHtml`
   - Tries to open email composer on contact page and then fill subject/body
 
 Source of truth:
@@ -129,6 +129,7 @@ Stored in `chrome.storage.sync`:
 - `messageTemplate: string` (WhatsApp prefill; supports `[name]`)
 - `noteTemplate: string`
 - `rowFilterWord: string`
+  - Comma-separated words are supported (rows are filtered if any term matches)
 - `visibleColumns: Record<string, boolean>`
 - `emailTemplates: Array<{ id, name, subject, body }>`
 
@@ -152,14 +153,16 @@ Persistence behavior notes:
 - Email templates full page (`#emailTemplatesPage`)
   - Left: template list (single active row)
   - Right: active template editor (name/subject/body)
-  - Actions: Back, New Template, Save Templates, Delete Template
+  - Actions: Back, Add Template
+  - Autosave indicator + Delete Template row above editor fields
 
 - Email template picker overlay (`#emailTemplatePickOverlay`)
   - Opened by row `Email`
   - User picks one template for that contact action
 
-- Settings modal (`#settingsOverlay`)
-  - General settings only (not template editing)
+- Settings page (`#settingsPage`)
+  - Opened as a full page/tab from header
+  - General settings + personal template import/export controls
 
 - Notes modal (`#notesOverlay`)
   - Loads notes for selected contact
