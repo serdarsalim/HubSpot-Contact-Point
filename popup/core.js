@@ -346,45 +346,16 @@
   }
 
   function getFirstNameFromContact(contact) {
-    const full = getContactDisplayName(contact);
-    const first = String(full || "")
-      .trim()
-      .split(/\s+/)[0];
-    return first || full || "";
+    const nameColumn = findNameColumn();
+    const rawName = nameColumn ? String(contact?.values?.[nameColumn.id] || "").trim() : "";
+    if (!rawName) return "";
+    return rawName.split(/\s+/)[0] || "";
   }
 
   function getContactTokenMap(contact) {
-    const tokens = {
-      name: getContactDisplayName(contact),
-      first_name: getFirstNameFromContact(contact),
-      phone: String(contact?.phoneDisplay || "").trim(),
-      possibility: ""
+    return {
+      name: getFirstNameFromContact(contact)
     };
-
-    const emailColumn = findEmailColumn();
-    if (emailColumn) {
-      tokens.email = String(contact?.values?.[emailColumn.id] || "").trim();
-    } else {
-      tokens.email = "";
-    }
-
-    for (const column of state.currentColumns) {
-      const value = String(contact?.values?.[column.id] || "").trim();
-      const keyById = templateTokenKey(column.id);
-      if (keyById) tokens[keyById] = value;
-
-      const keyByLabel = templateTokenKey(column.label);
-      if (keyByLabel && !Object.prototype.hasOwnProperty.call(tokens, keyByLabel)) {
-        tokens[keyByLabel] = value;
-      }
-    }
-
-    if (!tokens.possibility) {
-      const possibilityColumn = findPossibilityColumn();
-      if (possibilityColumn) tokens.possibility = String(contact?.values?.[possibilityColumn.id] || "").trim();
-    }
-
-    return tokens;
   }
 
   function buildContactUrl(recordId, portalId) {
