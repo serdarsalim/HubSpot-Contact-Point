@@ -137,6 +137,8 @@
 
   const SETTINGS_KEY = "popupSettings";
   const EMAIL_TEMPLATES_LOCAL_KEY = "popupEmailTemplates";
+  const WHATSAPP_TEMPLATES_LOCAL_KEY = "popupWhatsappTemplates";
+  const NOTE_TEMPLATES_LOCAL_KEY = "popupNoteTemplates";
   const TEMPLATE_USAGE_LOCAL_KEY = "popupTemplateUsageByContact";
   const LEGACY_NOTE_TEXT = "Reached out on WhatsApp";
   const DEFAULT_EMAIL_TEMPLATE = {
@@ -640,6 +642,8 @@
   App.constants = {
     SETTINGS_KEY,
     EMAIL_TEMPLATES_LOCAL_KEY,
+    WHATSAPP_TEMPLATES_LOCAL_KEY,
+    NOTE_TEMPLATES_LOCAL_KEY,
     TEMPLATE_USAGE_LOCAL_KEY,
     LEGACY_NOTE_TEXT,
     DEFAULT_EMAIL_TEMPLATE,

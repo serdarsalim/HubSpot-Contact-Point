@@ -159,9 +159,20 @@
 
     const prefix = String(countryPrefix || DEFAULT_COUNTRY_CODE).replace(/\D/g, "") || DEFAULT_COUNTRY_CODE;
 
+    // International number already has explicit country code.
     if (trimmed.startsWith("+")) return digits;
+    // International format with leading 00 (e.g. 0060...).
+    if (digits.startsWith("00")) return digits.slice(2);
+    // Already starts with configured prefix.
     if (digits.startsWith(prefix)) return digits;
-    return `${prefix}${digits}`;
+
+    // Local format with trunk zero: 017... -> 60 + 17...
+    if (digits.startsWith("0")) return `${prefix}${digits.slice(1)}`;
+    // Short local numbers likely missing country code.
+    if (digits.length <= 9) return `${prefix}${digits}`;
+
+    // Looks like a full international number without +.
+    return digits;
   }
 
   function findHeaderRow() {

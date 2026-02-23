@@ -5,7 +5,12 @@
 
   function buildSyncSettingsPayload(settingsInput = state.settings) {
     const source = settingsInput && typeof settingsInput === "object" ? settingsInput : {};
-    const { emailTemplates: _ignoreTemplates, ...syncSafeSettings } = source;
+    const {
+      emailTemplates: _ignoreEmailTemplates,
+      whatsappTemplates: _ignoreWhatsappTemplates,
+      noteTemplates: _ignoreNoteTemplates,
+      ...syncSafeSettings
+    } = source;
     return syncSafeSettings;
   }
 
@@ -114,8 +119,8 @@
 
   function fillSettingsForm() {
     dom.countryPrefixInput.value = state.settings.countryPrefix;
-    if (dom.messageTemplateInput) dom.messageTemplateInput.value = state.settings.messageTemplate || "";
-    if (dom.noteTemplateInput) dom.noteTemplateInput.value = state.settings.noteTemplate || "";
+    if (dom.messageTemplateInput) dom.messageTemplateInput.value = "";
+    if (dom.noteTemplateInput) dom.noteTemplateInput.value = "";
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
     renderColumnChecks();
   }
@@ -359,7 +364,7 @@
       ...state.settings,
       whatsappTemplates: next
     };
-    await persistSyncSettings(state.settings);
+    await chrome.storage.local.set({ [constants.WHATSAPP_TEMPLATES_LOCAL_KEY]: next });
     if (showToast) {
       if (typeof App.showToast === "function") {
         App.showToast(toastMessage);
@@ -377,7 +382,7 @@
       ...state.settings,
       noteTemplates: next
     };
-    await persistSyncSettings(state.settings);
+    await chrome.storage.local.set({ [constants.NOTE_TEMPLATES_LOCAL_KEY]: next });
     if (showToast) {
       if (typeof App.showToast === "function") {
         App.showToast(toastMessage);
@@ -604,20 +609,33 @@
   async function loadSettings() {
     const [syncResult, localResult] = await Promise.all([
       chrome.storage.sync.get(constants.SETTINGS_KEY),
-      chrome.storage.local.get([constants.EMAIL_TEMPLATES_LOCAL_KEY, constants.TEMPLATE_USAGE_LOCAL_KEY])
+      chrome.storage.local.get([
+        constants.EMAIL_TEMPLATES_LOCAL_KEY,
+        constants.WHATSAPP_TEMPLATES_LOCAL_KEY,
+        constants.NOTE_TEMPLATES_LOCAL_KEY,
+        constants.TEMPLATE_USAGE_LOCAL_KEY
+      ])
     ]);
     const saved = syncResult[constants.SETTINGS_KEY];
     const {
       defaultEmailTemplateId: _legacyDefaultId,
       emailTemplates: legacySyncTemplates,
+      whatsappTemplates: legacySyncWhatsappTemplates,
+      noteTemplates: legacySyncNoteTemplates,
       ...savedWithoutLegacy
     } = saved || {};
-    const localTemplates = localResult[constants.EMAIL_TEMPLATES_LOCAL_KEY];
+    const localEmailTemplates = localResult[constants.EMAIL_TEMPLATES_LOCAL_KEY];
+    const localWhatsappTemplates = localResult[constants.WHATSAPP_TEMPLATES_LOCAL_KEY];
+    const localNoteTemplates = localResult[constants.NOTE_TEMPLATES_LOCAL_KEY];
     const savedTemplateUsage = localResult[constants.TEMPLATE_USAGE_LOCAL_KEY];
-    const hasLocalTemplates = Array.isArray(localTemplates);
-    const emailTemplates = App.normalizeEmailTemplates(hasLocalTemplates ? localTemplates : legacySyncTemplates);
-    const whatsappTemplates = App.normalizeWhatsappTemplates(savedWithoutLegacy.whatsappTemplates);
-    const noteTemplates = App.normalizeNoteTemplates(savedWithoutLegacy.noteTemplates);
+    const hasLocalEmailTemplates = Array.isArray(localEmailTemplates);
+    const hasLocalWhatsappTemplates = Array.isArray(localWhatsappTemplates);
+    const hasLocalNoteTemplates = Array.isArray(localNoteTemplates);
+    const emailTemplates = App.normalizeEmailTemplates(hasLocalEmailTemplates ? localEmailTemplates : legacySyncTemplates);
+    const whatsappTemplates = App.normalizeWhatsappTemplates(
+      hasLocalWhatsappTemplates ? localWhatsappTemplates : legacySyncWhatsappTemplates
+    );
+    const noteTemplates = App.normalizeNoteTemplates(hasLocalNoteTemplates ? localNoteTemplates : legacySyncNoteTemplates);
     state.templateUsageByContact = App.normalizeTemplateUsageMap(savedTemplateUsage);
     state.settings = {
       ...constants.DEFAULT_SETTINGS,
@@ -630,16 +648,30 @@
       whatsappTemplates,
       noteTemplates
     };
+    state.settings.messageTemplate = "";
+    state.settings.noteTemplate = "";
     state.settings.themeMode = App.normalizeThemeMode(state.settings.themeMode);
     App.applyTheme(state.settings.themeMode);
 
     const needsSyncCleanup =
-      (saved && (Object.prototype.hasOwnProperty.call(saved, "emailTemplates") || Object.prototype.hasOwnProperty.call(saved, "defaultEmailTemplateId"))) ||
+      (saved &&
+        (Object.prototype.hasOwnProperty.call(saved, "emailTemplates") ||
+          Object.prototype.hasOwnProperty.call(saved, "whatsappTemplates") ||
+          Object.prototype.hasOwnProperty.call(saved, "noteTemplates") ||
+          Object.prototype.hasOwnProperty.call(saved, "defaultEmailTemplateId"))) ||
       state.settings.noteTemplate === constants.LEGACY_NOTE_TEXT;
     const writes = [];
 
-    if (!hasLocalTemplates && Array.isArray(legacySyncTemplates)) {
+    if (!hasLocalEmailTemplates && Array.isArray(legacySyncTemplates)) {
       writes.push(chrome.storage.local.set({ [constants.EMAIL_TEMPLATES_LOCAL_KEY]: emailTemplates }));
+    }
+
+    if (!hasLocalWhatsappTemplates && Array.isArray(legacySyncWhatsappTemplates)) {
+      writes.push(chrome.storage.local.set({ [constants.WHATSAPP_TEMPLATES_LOCAL_KEY]: whatsappTemplates }));
+    }
+
+    if (!hasLocalNoteTemplates && Array.isArray(legacySyncNoteTemplates)) {
+      writes.push(chrome.storage.local.set({ [constants.NOTE_TEMPLATES_LOCAL_KEY]: noteTemplates }));
     }
 
     if (state.settings.noteTemplate === constants.LEGACY_NOTE_TEXT) {
@@ -657,17 +689,34 @@
 
   async function saveSettings() {
     const next = settingsFromForm();
-    const hasVisible = Object.values(next.visibleColumns).some(Boolean);
-    if (!hasVisible) {
-      App.setStatus("Enable at least one column.");
+
+    // Only enforce this when we actually have detected columns.
+    const hasDetectedColumns = state.currentColumns.length > 0;
+    const hasVisibleDetectedColumn = hasDetectedColumns
+      ? state.currentColumns.some((col) => next.visibleColumns[col.id] !== false)
+      : true;
+
+    if (!hasVisibleDetectedColumn) {
+      const message = "Enable at least one column.";
+      App.setStatus(message);
+      if (typeof App.showToast === "function") App.showToast(message, 2600);
       return;
     }
 
-    state.settings = { ...state.settings, ...next };
+    state.settings = { ...state.settings, ...next, messageTemplate: "", noteTemplate: "" };
     state.settings.themeMode = App.normalizeThemeMode(state.settings.themeMode);
-    await persistSyncSettings(state.settings);
-    closeSettings();
-    App.renderContacts();
+
+    try {
+      await persistSyncSettings(state.settings);
+      closeSettings();
+      App.renderContacts();
+      App.setStatus("Settings saved.");
+      if (typeof App.showToast === "function") App.showToast("Settings saved.");
+    } catch (error) {
+      const reason = String(error?.message || error || "Unknown error.");
+      App.setStatus("Could not save settings: " + reason);
+      if (typeof App.showToast === "function") App.showToast("Save failed: " + reason, 3200);
+    }
   }
 
   Object.assign(App, {
