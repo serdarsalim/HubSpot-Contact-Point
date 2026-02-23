@@ -16,8 +16,84 @@
     }
 
     dom.notesListEl.innerHTML = state.notesDialogState.notes
-      .map((note) => `<div class='note-item'>${App.escapeHtml(note)}</div>`)
+      .map((note) => renderNoteItem(note))
       .join("");
+  }
+
+  function renderNoteItem(note) {
+    const parsed = parseHubSpotNote(note);
+    if (!parsed) {
+      const cleaned = cleanHubSpotNoteBody(note);
+      if (!cleaned) return "";
+      return `<div class='note-item'><div class='note-item-body'>${App.escapeHtml(cleaned)}</div></div>`;
+    }
+
+    const bodyHtml = App.escapeHtml(parsed.body || "");
+    const metaHtml = App.escapeHtml(`${parsed.whenText} by ${parsed.authorShort}`);
+    return `<div class='note-item'><div class='note-item-body'>${bodyHtml}</div><div class='note-item-meta'>${metaHtml}</div></div>`;
+  }
+
+  function parseHubSpotNote(rawNote) {
+    const normalized = String(rawNote || "").replace(/\s+/g, " ").trim();
+    const noteMatch = normalized.match(
+      /^note by\s+(.+?)\s+(\d{1,2})\s+([a-z]{3,9})\s+(\d{4})\s+at\s+(\d{1,2}:\d{2})(?:\s*([ap]m))?(?:\s+gmt[+-]\d{1,2})?\s*(.*)$/i
+    );
+    if (!noteMatch) return null;
+
+    const author = String(noteMatch[1] || "").trim();
+    const day = String(noteMatch[2] || "").trim();
+    const month = String(noteMatch[3] || "").trim();
+    const year = String(noteMatch[4] || "").trim();
+    const time = String(noteMatch[5] || "").trim();
+    const meridiem = String(noteMatch[6] || "").trim().toUpperCase();
+    const body = cleanHubSpotNoteBody(String(noteMatch[7] || "").trim());
+    if (!body) return null;
+
+    return {
+      body,
+      whenText: formatNoteDate(day, month, year, time, meridiem),
+      authorShort: compactAuthorName(author)
+    };
+  }
+
+  function cleanHubSpotNoteBody(bodyText) {
+    let cleaned = String(bodyText || "").replace(/\s+/g, " ").trim();
+    cleaned = cleaned.replace(/^note description\s*/i, "");
+    cleaned = cleaned.replace(
+      /\s*this activity is collapsed, meaning some of its details are hidden\. click to expand this activity\.\s*/i,
+      ""
+    );
+    const contactName = String(state?.notesDialogState?.contactName || "").trim();
+    if (contactName) {
+      const escapedName = escapeRegExp(contactName);
+      cleaned = cleaned.replace(new RegExp(`\\bfor\\s+${escapedName}\\b`, "ig"), "");
+    }
+    cleaned = cleaned.replace(/\bcreate a note\b/ig, "");
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    return cleaned.trim();
+  }
+
+  function escapeRegExp(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function formatNoteDate(day, month, year, time, meridiem) {
+    const shortYear = String(year || "").slice(-2);
+    const padDay = String(day || "").padStart(2, "0");
+    const meridiemText = meridiem ? ` ${meridiem}` : "";
+    return `${padDay} ${month} ${shortYear}, ${time}${meridiemText}`;
+  }
+
+  function compactAuthorName(fullName) {
+    const parts = String(fullName || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (!parts.length) return "Unknown";
+    if (parts.length === 1) return parts[0];
+    const firstName = parts[0];
+    const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
+    return `${firstName} ${lastInitial}.`;
   }
 
   function setNotesDialogBusy(busy, options = {}) {

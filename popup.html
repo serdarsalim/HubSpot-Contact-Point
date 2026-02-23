@@ -847,8 +847,18 @@
         font-size: 13px;
         line-height: 1.35;
         color: #22384f;
-        white-space: pre-wrap;
+        white-space: normal;
         word-break: break-word;
+      }
+
+      .note-item-body {
+        margin-bottom: 4px;
+        white-space: pre-wrap;
+      }
+
+      .note-item-meta {
+        font-size: 11px;
+        color: #5e7084;
       }
 
       .note-item:last-child {
@@ -1422,6 +1432,10 @@
         background: #1f3248;
         border-color: #3a5574;
         color: #d3e3f6;
+      }
+
+      body[data-theme="dark"] .note-item-meta {
+        color: #9ab1cb;
       }
 
       body[data-theme="dark"] .email-template-pick-search {
