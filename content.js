@@ -559,16 +559,83 @@
   }
 
   function elementText(element) {
-    return cleanText(element?.innerText || element?.textContent || element?.getAttribute?.("aria-label") || "");
+    return cleanText(
+      element?.innerText ||
+        element?.textContent ||
+        element?.getAttribute?.("aria-label") ||
+        element?.getAttribute?.("value") ||
+        ""
+    );
+  }
+
+  function isLikelyPropertyFieldHint(hint) {
+    const text = String(hint || "").toLowerCase();
+    if (!text) return false;
+    return (
+      text.includes("first name") ||
+      text.includes("last name") ||
+      text.includes("phone") ||
+      text.includes("email") ||
+      text.includes("contact owner") ||
+      text.includes("city") ||
+      text.includes("country") ||
+      text.includes("company")
+    );
+  }
+
+  function hasNoteActionControl(root) {
+    if (!root) return false;
+    const controls = Array.from(root.querySelectorAll("button, [role='button']"));
+    return controls.some((el) => {
+      if (!isVisible(el)) return false;
+      const text = elementText(el).toLowerCase();
+      if (!text) return false;
+      return text.includes("save note") || text.includes("create note") || text.includes("log activity") || text.includes("add note");
+    });
+  }
+
+  function getNoteComposerRoot(editor) {
+    const candidates = [
+      editor?.closest("[role='dialog']"),
+      editor?.closest("form"),
+      editor?.closest("section"),
+      editor?.closest("article"),
+      editor?.closest("div")
+    ].filter(Boolean);
+
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (const root of candidates) {
+      const text = elementText(root).toLowerCase();
+      if (!text) continue;
+
+      let score = 0;
+      if (text.includes("note")) score += 8;
+      if (text.includes("create note") || text.includes("add note")) score += 8;
+      if (text.includes("save note") || text.includes("log activity")) score += 6;
+      if (hasNoteActionControl(root)) score += 10;
+      if (text.includes("first name") || text.includes("last name")) score -= 24;
+      if (root.matches("[role='dialog']")) score += 4;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = root;
+      }
+    }
+
+    return bestScore >= 6 ? best : null;
   }
 
   function findNoteEditor() {
     const candidates = Array.from(document.querySelectorAll("textarea, [contenteditable='true'], [role='textbox']")).filter((el) => {
       if (!isVisible(el)) return false;
+      if (el.tagName === "INPUT") return false;
       const hint = cleanText(
         el.getAttribute("placeholder") || el.getAttribute("aria-label") || el.getAttribute("data-selenium-test") || ""
       ).toLowerCase();
       if (hint.includes("search")) return false;
+      if (isLikelyPropertyFieldHint(hint)) return false;
       return true;
     });
 
@@ -579,17 +646,20 @@
         const hint = cleanText(
           el.getAttribute("placeholder") || el.getAttribute("aria-label") || el.getAttribute("data-selenium-test") || ""
         ).toLowerCase();
+        const composerRoot = getNoteComposerRoot(el);
         let score = 0;
-        if (hint.includes("note")) score += 6;
-        if (hint.includes("body")) score += 3;
-        if (hint.includes("activity")) score += 2;
-        if (el.closest("[role='dialog']")) score += 2;
-        if (el.tagName === "TEXTAREA") score += 2;
+        if (hint.includes("note")) score += 8;
+        if (hint.includes("body")) score += 4;
+        if (hint.includes("activity")) score += 3;
+        if (hint.includes("comment")) score += 2;
+        if (el.closest("[role='dialog']")) score += 4;
+        if (el.tagName === "TEXTAREA") score += 3;
+        if (composerRoot) score += 12;
         return { el, score };
       })
       .sort((a, b) => b.score - a.score);
 
-    return scored[0].el || null;
+    return scored[0]?.score >= 10 ? scored[0].el : null;
   }
 
   function clickNoteTrigger() {
@@ -598,11 +668,66 @@
       const text = elementText(el).toLowerCase();
       if (!text) return false;
       if (text.includes("cancel") || text.includes("close")) return false;
+      if (text.includes("first name") || text.includes("last name")) return false;
       return text === "note" || text.includes("add note") || text.includes("create note");
     });
 
     if (!triggers.length) return false;
     triggers[0].click();
+    return true;
+  }
+
+  function findHubSpotCenterTabControl(targetLabel) {
+    const desired = String(targetLabel || "").trim().toLowerCase();
+    if (!desired) return null;
+
+    const controls = Array.from(document.querySelectorAll("button, [role='button'], [role='tab'], a"));
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (const el of controls) {
+      if (!isVisible(el)) continue;
+      const label = elementText(el).toLowerCase();
+      if (!label) continue;
+      if (label !== desired) continue;
+
+      // Never use side menus/popovers.
+      if (el.closest("[role='menu'], [role='listbox'], [data-test-id*='menu'], [data-testid*='menu']")) continue;
+
+      const container = el.closest("[role='tablist'], nav, section, article, main, div") || document.body;
+      const scopeText = elementText(container).toLowerCase();
+
+      let score = 0;
+      if (scopeText.includes("overview") && scopeText.includes("activities") && scopeText.includes("intelligence")) score += 30;
+      if (scopeText.includes("activity") && scopeText.includes("notes") && scopeText.includes("emails")) score += 22;
+      if (scopeText.includes("search activities")) score += 16;
+      if (scopeText.includes("about this contact")) score -= 30;
+      if (scopeText.includes("reorder activity buttons")) score -= 30;
+      if (scopeText.includes("log whatsapp message")) score -= 30;
+      if (scopeText.includes("more")) score -= 12;
+      if (el.getAttribute("role") === "tab") score += 8;
+      if (el.closest("main")) score += 6;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+
+    return bestScore >= 8 ? best : null;
+  }
+
+  function clickActivitiesTab() {
+    const tab = findHubSpotCenterTabControl("activities");
+    if (!tab) return false;
+    tab.click();
+    return true;
+  }
+
+  function clickNotesActivityTab() {
+    const tab = findHubSpotCenterTabControl("notes");
+    if (!tab) return false;
+    tab.click();
     return true;
   }
 
@@ -612,7 +737,7 @@
 
     editor.focus();
 
-    if (editor.tagName === "TEXTAREA" || editor.tagName === "INPUT") {
+    if (editor.tagName === "TEXTAREA") {
       editor.value = text;
       editor.dispatchEvent(new Event("input", { bubbles: true }));
       editor.dispatchEvent(new Event("change", { bubbles: true }));
@@ -624,28 +749,32 @@
     editor.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  function findSaveButton(editor) {
-    const roots = [editor?.closest("[role='dialog']"), editor?.closest("form"), document].filter(Boolean);
+  function findCreateNoteButton(editor) {
+    const composerRoot = getNoteComposerRoot(editor);
+    if (!composerRoot) return null;
+
+    const roots = [composerRoot, editor?.closest("[role='dialog']"), editor?.closest("form")].filter(Boolean);
     const seen = new Set();
     let best = null;
     let bestScore = -Infinity;
 
     for (const root of roots) {
-      const buttons = Array.from(root.querySelectorAll("button, [role='button']"));
+      const buttons = Array.from(root.querySelectorAll("button, [role='button'], input[type='submit'], input[type='button']"));
       for (const button of buttons) {
         if (seen.has(button)) continue;
         seen.add(button);
         if (!isVisible(button)) continue;
         const text = elementText(button).toLowerCase();
         if (!text) continue;
+        if (text !== "create note") continue;
 
-        let score = 0;
-        if (text === "save") score += 12;
-        if (text.includes("save note")) score += 14;
-        if (text.includes("save")) score += 8;
-        if (text.includes("log activity")) score += 7;
-        if (text.includes("create") && text.includes("note")) score += 6;
-        if (text.includes("cancel") || text.includes("discard") || text.includes("close")) score -= 10;
+        let score = 20;
+        const classText = String(button.className || "").toLowerCase();
+        if (classText.includes("primary")) score += 4;
+
+        const rootText = elementText(root).toLowerCase();
+        if (rootText.includes("first name") || rootText.includes("last name")) score -= 28;
+        if (hasNoteActionControl(root)) score += 6;
 
         if (score > bestScore) {
           bestScore = score;
@@ -654,8 +783,9 @@
       }
     }
 
-    return bestScore > 0 ? best : null;
+    return bestScore >= 10 ? best : null;
   }
+
 
   async function createNoteOnPage(noteBody) {
     const text = cleanText(noteBody || "");
@@ -664,24 +794,28 @@
     let editor = null;
     for (let i = 0; i < TIMING.noteComposerOpenAttempts; i += 1) {
       editor = findNoteEditor();
-      if (editor) break;
+      if (editor && getNoteComposerRoot(editor)) break;
+
+      // Move to contact Activities > Notes context before opening composer.
+      if (i === 0 || i % 3 === 0) clickActivitiesTab();
+      if (i === 1 || i % 3 === 1) clickNotesActivityTab();
       clickNoteTrigger();
       await sleep(TIMING.noteComposerOpenDelayMs);
     }
 
-    if (!editor) {
+    if (!editor || !getNoteComposerRoot(editor)) {
       throw new Error("Could not find note editor on contact page.");
     }
 
     setEditorText(editor, text);
     await sleep(TIMING.noteEditorSettleDelayMs);
 
-    const saveButton = findSaveButton(editor);
-    if (!saveButton) {
-      throw new Error("Could not find note save button.");
+    const createNoteButton = findCreateNoteButton(editor);
+    if (!createNoteButton) {
+      throw new Error("Could not find Create note button.");
     }
 
-    saveButton.click();
+    createNoteButton.click();
     await sleep(TIMING.noteSaveSettleDelayMs);
     return { ok: true };
   }
