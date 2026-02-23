@@ -359,9 +359,15 @@
     dom.emailTemplatePickList.innerHTML = visibleTemplates
       .map((template) => {
         const preview = templatePreviewText(template);
+        const isAppliedForContact = App.hasTemplateApplied("email", state.emailTemplatePickState.key, template.id);
         return `
         <button type='button' class='email-template-pick-item' data-template-id='${App.escapeHtml(template.id)}'>
-          <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+          <span class='email-template-pick-head'>
+            <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+            <span class='email-template-pick-used ${isAppliedForContact ? "is-used" : ""}' aria-hidden='true'>${
+              isAppliedForContact ? "✓" : ""
+            }</span>
+          </span>
           <span class='email-template-pick-preview'>${App.escapeHtml(preview.slice(0, 90) || "No subject/body yet")}</span>
         </button>
       `;
@@ -447,6 +453,7 @@
         return;
       }
 
+      App.markTemplateApplied("email", resolvedKey, template.id);
       App.setStatus(`Applied "${template.name}" for ${App.getContactDisplayName(contact)}.`);
       if (typeof App.trackEvent === "function") {
         App.trackEvent("template_applied", {

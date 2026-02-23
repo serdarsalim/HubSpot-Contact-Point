@@ -133,8 +133,33 @@
           ${cellsHtml}
           <td class='actions'>
             <span class='row-actions-wrap'>
-              <button type='button' class='row-action-btn row-email-btn' data-key='${App.escapeHtml(key)}'>Email</button>
-              <button type='button' class='row-action-btn row-notes-btn' data-key='${App.escapeHtml(key)}'>Notes</button>
+              <button
+                type='button'
+                class='row-action-btn row-whatsapp-btn'
+                data-key='${App.escapeHtml(key)}'
+                aria-label='WhatsApp'
+                title='WhatsApp'
+              >
+                💬
+              </button>
+              <button
+                type='button'
+                class='row-action-btn row-email-btn'
+                data-key='${App.escapeHtml(key)}'
+                aria-label='Email'
+                title='Email'
+              >
+                ✉
+              </button>
+              <button
+                type='button'
+                class='row-action-btn row-notes-btn'
+                data-key='${App.escapeHtml(key)}'
+                aria-label='Notes'
+                title='Notes'
+              >
+                📝
+              </button>
             </span>
           </td>
         </tr>
@@ -208,6 +233,16 @@
         }
 
         App.openEmailTemplatePicker(contact, key);
+      });
+    });
+
+    dom.listEl.querySelectorAll(".row-whatsapp-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        const key = button.getAttribute("data-key");
+        if (!key) return;
+        const contact = displayedByKey.get(key);
+        if (!contact) return;
+        App.openWhatsappTemplatePicker(contact, key);
       });
     });
 

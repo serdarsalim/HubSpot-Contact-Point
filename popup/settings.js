@@ -18,18 +18,24 @@
     return !!dom.emailTemplatesPageEl && !dom.emailTemplatesPageEl.hidden;
   }
 
+  function isWhatsappTemplatesOpen() {
+    return !!dom.whatsappTemplatesPageEl && !dom.whatsappTemplatesPageEl.hidden;
+  }
+
   function isSettingsPageOpen() {
     return !!dom.settingsPageEl && !dom.settingsPageEl.hidden;
   }
 
   function syncTopLevelViewState() {
     const emailOpen = isEmailTemplatesOpen();
+    const whatsappOpen = isWhatsappTemplatesOpen();
     const settingsOpen = isSettingsPageOpen();
 
     if (dom.emailSettingsBtn) dom.emailSettingsBtn.classList.toggle("active", emailOpen);
+    if (dom.whatsappSettingsBtn) dom.whatsappSettingsBtn.classList.toggle("active", whatsappOpen);
     if (dom.settingsBtn) dom.settingsBtn.classList.toggle("active", settingsOpen);
-    if (dom.contactViewBtn) dom.contactViewBtn.classList.toggle("active", !emailOpen && !settingsOpen);
-    if (dom.mainPageEl) dom.mainPageEl.classList.toggle("header-only", emailOpen || settingsOpen);
+    if (dom.contactViewBtn) dom.contactViewBtn.classList.toggle("active", !emailOpen && !whatsappOpen && !settingsOpen);
+    if (dom.mainPageEl) dom.mainPageEl.classList.toggle("header-only", emailOpen || whatsappOpen || settingsOpen);
     App.updateStickyHeadOffset();
   }
 
@@ -40,6 +46,11 @@
 
   function setEmailTemplatesMode(isOpen) {
     if (dom.emailTemplatesPageEl) dom.emailTemplatesPageEl.hidden = !isOpen;
+    syncTopLevelViewState();
+  }
+
+  function setWhatsappTemplatesMode(isOpen) {
+    if (dom.whatsappTemplatesPageEl) dom.whatsappTemplatesPageEl.hidden = !isOpen;
     syncTopLevelViewState();
   }
 
@@ -90,11 +101,18 @@
   function openSettings() {
     if (!dom.settingsPageEl || !dom.settingsPageEl.hidden) return;
     App.closeEmailTemplatePicker();
+    App.closeWhatsappTemplatePicker();
     if (isEmailTemplatesOpen()) {
       if (typeof App.flushEmailTemplateAutosave === "function") {
         void App.flushEmailTemplateAutosave({ showToast: false });
       }
       setEmailTemplatesMode(false);
+    }
+    if (isWhatsappTemplatesOpen()) {
+      if (typeof App.flushWhatsappTemplateAutosave === "function") {
+        void App.flushWhatsappTemplateAutosave({ showToast: false });
+      }
+      setWhatsappTemplatesMode(false);
     }
     fillSettingsForm();
     setSettingsMode(true);
@@ -116,8 +134,15 @@
   function openEmailSettings() {
     if (!dom.emailTemplatesPageEl || !dom.emailTemplatesPageEl.hidden) return;
     App.closeEmailTemplatePicker();
+    App.closeWhatsappTemplatePicker();
     if (isSettingsPageOpen()) {
       setSettingsMode(false);
+    }
+    if (isWhatsappTemplatesOpen()) {
+      if (typeof App.flushWhatsappTemplateAutosave === "function") {
+        void App.flushWhatsappTemplateAutosave({ showToast: false });
+      }
+      setWhatsappTemplatesMode(false);
     }
     setEmailTemplatesMode(true);
     App.loadEmailTemplatesDraftFromSettings();
@@ -137,6 +162,32 @@
     setEmailTemplatesMode(false);
   }
 
+  function openWhatsappSettings() {
+    if (!dom.whatsappTemplatesPageEl || !dom.whatsappTemplatesPageEl.hidden) return;
+    App.closeEmailTemplatePicker();
+    App.closeWhatsappTemplatePicker();
+    if (isSettingsPageOpen()) {
+      setSettingsMode(false);
+    }
+    if (isEmailTemplatesOpen()) {
+      if (typeof App.flushEmailTemplateAutosave === "function") {
+        void App.flushEmailTemplateAutosave({ showToast: false });
+      }
+      setEmailTemplatesMode(false);
+    }
+    setWhatsappTemplatesMode(true);
+    App.loadWhatsappTemplatesDraftFromSettings();
+    App.renderWhatsappTemplatesPage();
+  }
+
+  function closeWhatsappSettings() {
+    if (!isWhatsappTemplatesOpen()) return;
+    if (typeof App.flushWhatsappTemplateAutosave === "function") {
+      void App.flushWhatsappTemplateAutosave({ showToast: false });
+    }
+    setWhatsappTemplatesMode(false);
+  }
+
   function toggleEmailSettings() {
     if (dom.emailTemplatesPageEl?.hidden) {
       openEmailSettings();
@@ -145,8 +196,19 @@
     closeEmailSettings();
   }
 
+  function toggleWhatsappSettings() {
+    if (dom.whatsappTemplatesPageEl?.hidden) {
+      openWhatsappSettings();
+      return;
+    }
+    closeWhatsappSettings();
+  }
+
   function openContactsView() {
+    App.closeEmailTemplatePicker();
+    App.closeWhatsappTemplatePicker();
     closeEmailSettings();
+    closeWhatsappSettings();
     closeSettings();
   }
 
@@ -159,6 +221,24 @@
       emailTemplates: next
     };
     await chrome.storage.local.set({ [constants.EMAIL_TEMPLATES_LOCAL_KEY]: next });
+    if (showToast) {
+      if (typeof App.showToast === "function") {
+        App.showToast(toastMessage);
+      } else {
+        App.setStatus(toastMessage);
+      }
+    }
+  }
+
+  async function saveWhatsappSettings(options = {}) {
+    const showToast = options?.showToast === true;
+    const toastMessage = String(options?.toastMessage || "WhatsApp template saved.");
+    const next = App.normalizeWhatsappTemplates(state.whatsappTemplatesDraft);
+    state.settings = {
+      ...state.settings,
+      whatsappTemplates: next
+    };
+    await persistSyncSettings(state.settings);
     if (showToast) {
       if (typeof App.showToast === "function") {
         App.showToast(toastMessage);
@@ -396,6 +476,7 @@
     const localTemplates = localResult[constants.EMAIL_TEMPLATES_LOCAL_KEY];
     const hasLocalTemplates = Array.isArray(localTemplates);
     const emailTemplates = App.normalizeEmailTemplates(hasLocalTemplates ? localTemplates : legacySyncTemplates);
+    const whatsappTemplates = App.normalizeWhatsappTemplates(savedWithoutLegacy.whatsappTemplates);
     state.settings = {
       ...constants.DEFAULT_SETTINGS,
       ...savedWithoutLegacy,
@@ -403,7 +484,8 @@
         ...constants.DEFAULT_SETTINGS.visibleColumns,
         ...(savedWithoutLegacy.visibleColumns || {})
       },
-      emailTemplates
+      emailTemplates,
+      whatsappTemplates
     };
     state.settings.themeMode = App.normalizeThemeMode(state.settings.themeMode);
     App.applyTheme(state.settings.themeMode);
@@ -454,14 +536,19 @@
     toggleSettings,
     setSettingsMode,
     setEmailTemplatesMode,
+    setWhatsappTemplatesMode,
     syncTopLevelViewState,
     openEmailSettings,
     closeEmailSettings,
     toggleEmailSettings,
+    openWhatsappSettings,
+    closeWhatsappSettings,
+    toggleWhatsappSettings,
     openContactsView,
     buildSyncSettingsPayload,
     persistSyncSettings,
     saveEmailSettings,
+    saveWhatsappSettings,
     exportPersonalTemplates,
     triggerImportTemplatesPicker,
     onImportTemplatesInputChange,

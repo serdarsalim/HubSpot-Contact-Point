@@ -6,6 +6,7 @@
   if (dom.themeToggleBtn) dom.themeToggleBtn.addEventListener("click", App.toggleTheme);
   if (dom.contactViewBtn) dom.contactViewBtn.addEventListener("click", App.openContactsView);
   if (dom.emailSettingsBtn) dom.emailSettingsBtn.addEventListener("click", App.toggleEmailSettings);
+  if (dom.whatsappSettingsBtn) dom.whatsappSettingsBtn.addEventListener("click", App.toggleWhatsappSettings);
   dom.cancelSettingsBtn.addEventListener("click", App.closeSettings);
   dom.saveSettingsBtn.addEventListener("click", App.saveSettings);
 
@@ -26,6 +27,23 @@
     });
   }
 
+  if (dom.addWhatsappTemplateBtn) {
+    dom.addWhatsappTemplateBtn.addEventListener("click", App.addWhatsappTemplateDraft);
+  }
+
+  if (dom.whatsappTemplatesListEl) {
+    dom.whatsappTemplatesListEl.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const rowButton = target.closest("[data-template-id]");
+      if (!(rowButton instanceof HTMLElement)) return;
+      const templateId = String(rowButton.getAttribute("data-template-id") || "");
+      if (!templateId) return;
+      state.activeWhatsappTemplateId = templateId;
+      App.renderWhatsappTemplatesPage();
+    });
+  }
+
   if (dom.exportTemplatesBtn) dom.exportTemplatesBtn.addEventListener("click", App.exportPersonalTemplates);
   if (dom.importTemplatesBtn) dom.importTemplatesBtn.addEventListener("click", App.triggerImportTemplatesPicker);
   if (dom.importTemplatesInput) dom.importTemplatesInput.addEventListener("change", (event) => void App.onImportTemplatesInputChange(event));
@@ -33,6 +51,12 @@
   if (dom.emailTemplatePickOverlay) {
     dom.emailTemplatePickOverlay.addEventListener("click", (event) => {
       if (event.target === dom.emailTemplatePickOverlay) App.closeEmailTemplatePicker();
+    });
+  }
+
+  if (dom.whatsappTemplatePickOverlay) {
+    dom.whatsappTemplatePickOverlay.addEventListener("click", (event) => {
+      if (event.target === dom.whatsappTemplatePickOverlay) App.closeWhatsappTemplatePicker();
     });
   }
 
@@ -49,6 +73,7 @@
   }
 
   if (dom.cancelEmailTemplatePickBtn) dom.cancelEmailTemplatePickBtn.addEventListener("click", App.closeEmailTemplatePicker);
+  if (dom.cancelWhatsappTemplatePickBtn) dom.cancelWhatsappTemplatePickBtn.addEventListener("click", App.closeWhatsappTemplatePicker);
   if (dom.recordIdRequiredCloseBtn) dom.recordIdRequiredCloseBtn.addEventListener("click", App.closeRecordIdRequiredDialog);
   if (dom.emailTemplatePickSearchInput) {
     dom.emailTemplatePickSearchInput.addEventListener("input", (event) => {
@@ -60,6 +85,14 @@
   }
   if (dom.cancelTemplateImportBtn) dom.cancelTemplateImportBtn.addEventListener("click", App.closeTemplateImportReview);
   if (dom.applyTemplateImportBtn) dom.applyTemplateImportBtn.addEventListener("click", () => void App.applyTemplateImport());
+  if (dom.whatsappTemplatePickSearchInput) {
+    dom.whatsappTemplatePickSearchInput.addEventListener("input", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      state.whatsappTemplatePickState.query = String(target.value || "");
+      App.renderWhatsappTemplatePickerOptions();
+    });
+  }
 
   if (dom.emailTemplatePickList) {
     dom.emailTemplatePickList.addEventListener("click", (event) => {
@@ -78,12 +111,36 @@
     });
   }
 
+  if (dom.whatsappTemplatePickList) {
+    dom.whatsappTemplatePickList.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const button = target.closest("[data-template-id]");
+      if (!(button instanceof HTMLElement)) return;
+
+      const templateId = String(button.getAttribute("data-template-id") || "");
+      if (!templateId) return;
+      const template = App.normalizeWhatsappTemplates(state.settings.whatsappTemplates).find((item) => item.id === templateId) || null;
+      const contact = state.whatsappTemplatePickState.contact;
+      const key = state.whatsappTemplatePickState.key;
+      App.closeWhatsappTemplatePicker();
+      void App.applyWhatsappTemplateToContact(contact, key, template);
+    });
+  }
+
   if (dom.deleteEmailTemplateBtn) dom.deleteEmailTemplateBtn.addEventListener("click", App.deleteActiveEmailTemplateDraft);
   if (dom.emailTemplateNameInput) dom.emailTemplateNameInput.addEventListener("input", App.upsertActiveTemplateFromForm);
   if (dom.emailTemplateSubjectInput) dom.emailTemplateSubjectInput.addEventListener("input", App.upsertActiveTemplateFromForm);
   if (dom.emailTemplateBodyInput) dom.emailTemplateBodyInput.addEventListener("input", App.upsertActiveTemplateFromForm);
   if (dom.emailTemplateNameInput) dom.emailTemplateNameInput.addEventListener("blur", () => void App.flushEmailTemplateAutosave({ showToast: false }));
   if (dom.emailTemplateSubjectInput) dom.emailTemplateSubjectInput.addEventListener("blur", () => void App.flushEmailTemplateAutosave({ showToast: false }));
+  if (dom.deleteWhatsappTemplateBtn) dom.deleteWhatsappTemplateBtn.addEventListener("click", App.deleteActiveWhatsappTemplateDraft);
+  if (dom.whatsappTemplateNameInput) dom.whatsappTemplateNameInput.addEventListener("input", App.upsertActiveWhatsappTemplateFromForm);
+  if (dom.whatsappTemplateBodyInput) dom.whatsappTemplateBodyInput.addEventListener("input", App.upsertActiveWhatsappTemplateFromForm);
+  if (dom.whatsappTemplateNameInput)
+    dom.whatsappTemplateNameInput.addEventListener("blur", () => void App.flushWhatsappTemplateAutosave({ showToast: false }));
+  if (dom.whatsappTemplateBodyInput)
+    dom.whatsappTemplateBodyInput.addEventListener("blur", () => void App.flushWhatsappTemplateAutosave({ showToast: false }));
 
   if (dom.notesOverlay) {
     dom.notesOverlay.addEventListener("click", (event) => {

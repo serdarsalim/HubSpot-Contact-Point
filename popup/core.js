@@ -36,6 +36,7 @@
     statusActionsEl: document.getElementById("statusActions"),
     mainPageEl: document.getElementById("mainPage"),
     emailTemplatesPageEl: document.getElementById("emailTemplatesPage"),
+    whatsappTemplatesPageEl: document.getElementById("whatsappTemplatesPage"),
     stickyHeadEl: document.getElementById("stickyHead"),
     listEl: document.getElementById("list"),
 
@@ -43,6 +44,7 @@
     themeToggleBtn: document.getElementById("themeToggleBtn"),
     contactViewBtn: document.getElementById("contactViewBtn"),
     emailSettingsBtn: document.getElementById("emailSettingsBtn"),
+    whatsappSettingsBtn: document.getElementById("whatsappSettingsBtn"),
     cancelSettingsBtn: document.getElementById("cancelSettingsBtn"),
     saveSettingsBtn: document.getElementById("saveSettingsBtn"),
     settingsPageEl: document.getElementById("settingsPage"),
@@ -59,6 +61,7 @@
     applyTemplateImportBtn: document.getElementById("applyTemplateImportBtn"),
     notesOverlay: document.getElementById("notesOverlay"),
     emailTemplatePickOverlay: document.getElementById("emailTemplatePickOverlay"),
+    whatsappTemplatePickOverlay: document.getElementById("whatsappTemplatePickOverlay"),
     recordIdRequiredOverlay: document.getElementById("recordIdRequiredOverlay"),
     notesTitleEl: document.getElementById("notesTitle"),
     notesListEl: document.getElementById("notesList"),
@@ -70,6 +73,10 @@
     emailTemplatePickSearchInput: document.getElementById("emailTemplatePickSearchInput"),
     emailTemplatePickList: document.getElementById("emailTemplatePickList"),
     cancelEmailTemplatePickBtn: document.getElementById("cancelEmailTemplatePickBtn"),
+    whatsappTemplatePickTitle: document.getElementById("whatsappTemplatePickTitle"),
+    whatsappTemplatePickSearchInput: document.getElementById("whatsappTemplatePickSearchInput"),
+    whatsappTemplatePickList: document.getElementById("whatsappTemplatePickList"),
+    cancelWhatsappTemplatePickBtn: document.getElementById("cancelWhatsappTemplatePickBtn"),
     recordIdRequiredMessageEl: document.getElementById("recordIdRequiredMessage"),
     recordIdRequiredCloseBtn: document.getElementById("recordIdRequiredCloseBtn"),
 
@@ -91,6 +98,14 @@
     emailTemplateBodyInput: document.getElementById("emailTemplateBodyInput"),
     emailTemplateSaveStateEl: document.getElementById("emailTemplateSaveState"),
     deleteEmailTemplateBtn: document.getElementById("deleteEmailTemplateBtn"),
+    whatsappTemplatesListEl: document.getElementById("whatsappTemplatesList"),
+    addWhatsappTemplateBtn: document.getElementById("addWhatsappTemplateBtn"),
+    whatsappTemplateEmptyEl: document.getElementById("whatsappTemplateEmpty"),
+    whatsappTemplateEditorEl: document.getElementById("whatsappTemplateEditor"),
+    whatsappTemplateNameInput: document.getElementById("whatsappTemplateNameInput"),
+    whatsappTemplateBodyInput: document.getElementById("whatsappTemplateBodyInput"),
+    whatsappTemplateSaveStateEl: document.getElementById("whatsappTemplateSaveState"),
+    deleteWhatsappTemplateBtn: document.getElementById("deleteWhatsappTemplateBtn"),
     appToastEl: document.getElementById("appToast")
   };
   let toastTimerId = null;
@@ -104,6 +119,11 @@
     subject: "",
     body: "Hi [name],"
   };
+  const DEFAULT_WHATSAPP_TEMPLATE = {
+    id: "wa_template_default",
+    name: "Template 1",
+    body: "Hi [name],"
+  };
   const DEFAULT_SETTINGS = {
     themeMode: "light",
     countryPrefix: "60",
@@ -111,7 +131,8 @@
     noteTemplate: "",
     rowFilterWord: "",
     visibleColumns: {},
-    emailTemplates: [DEFAULT_EMAIL_TEMPLATE]
+    emailTemplates: [DEFAULT_EMAIL_TEMPLATE],
+    whatsappTemplates: [DEFAULT_WHATSAPP_TEMPLATE]
   };
 
   const state = {
@@ -134,11 +155,20 @@
     emailTemplatesDraft: [],
     activeEmailTemplateId: "",
     syncingEmailTemplateForm: false,
+    whatsappTemplatesDraft: [],
+    activeWhatsappTemplateId: "",
+    syncingWhatsappTemplateForm: false,
     emailTemplatePickState: {
       key: "",
       contact: null,
       query: ""
-    }
+    },
+    whatsappTemplatePickState: {
+      key: "",
+      contact: null,
+      query: ""
+    },
+    templateUsageByContact: {}
   };
 
   function columnType(col) {
@@ -207,6 +237,29 @@
 
     if (!templates.length) {
       templates.push({ ...DEFAULT_EMAIL_TEMPLATE });
+    }
+    return templates;
+  }
+
+  function normalizeWhatsappTemplates(rawTemplates) {
+    const templates = [];
+    const seen = new Set();
+    const source = Array.isArray(rawTemplates) ? rawTemplates : [];
+
+    for (const item of source) {
+      const id = String(item?.id || "").trim() || makeTemplateId();
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      templates.push({
+        id,
+        name: String(item?.name || "").trim() || "Untitled",
+        body: String(item?.body || "").trim()
+      });
+    }
+
+    if (!templates.length) {
+      templates.push({ ...DEFAULT_WHATSAPP_TEMPLATE });
     }
     return templates;
   }
@@ -419,6 +472,38 @@
     return getFilteredContacts().filter((c) => state.selectedKeys.has(contactKey(c)));
   }
 
+  function normalizeTemplateUsageKind(kind) {
+    return String(kind || "").toLowerCase() === "whatsapp" ? "whatsapp" : "email";
+  }
+
+  function getTemplateUsageForContact(contactKeyInput) {
+    const key = String(contactKeyInput || "").trim();
+    if (!key) return null;
+    if (!state.templateUsageByContact[key]) {
+      state.templateUsageByContact[key] = {
+        email: Object.create(null),
+        whatsapp: Object.create(null)
+      };
+    }
+    return state.templateUsageByContact[key];
+  }
+
+  function markTemplateApplied(kind, contactKeyInput, templateIdInput) {
+    const contactUsage = getTemplateUsageForContact(contactKeyInput);
+    const templateId = String(templateIdInput || "").trim();
+    if (!contactUsage || !templateId) return;
+    const usageKind = normalizeTemplateUsageKind(kind);
+    contactUsage[usageKind][templateId] = true;
+  }
+
+  function hasTemplateApplied(kind, contactKeyInput, templateIdInput) {
+    const contactUsage = getTemplateUsageForContact(contactKeyInput);
+    const templateId = String(templateIdInput || "").trim();
+    if (!contactUsage || !templateId) return false;
+    const usageKind = normalizeTemplateUsageKind(kind);
+    return contactUsage[usageKind][templateId] === true;
+  }
+
   function updateExportActionsVisibility() {
     const hasSelection = getSelectedContacts().length > 0;
     if (dom.statusActionsEl) dom.statusActionsEl.hidden = !hasSelection;
@@ -447,6 +532,7 @@
     EMAIL_TEMPLATES_LOCAL_KEY,
     LEGACY_NOTE_TEXT,
     DEFAULT_EMAIL_TEMPLATE,
+    DEFAULT_WHATSAPP_TEMPLATE,
     DEFAULT_SETTINGS
   };
   App.messageTypes = MESSAGE_TYPES;
@@ -461,6 +547,7 @@
     escapeHtml,
     makeTemplateId,
     normalizeEmailTemplates,
+    normalizeWhatsappTemplates,
     templateTokenKey,
     applyTokens,
     normalizeThemeMode,
@@ -488,6 +575,8 @@
     getContactTokenMap,
     buildContactUrl,
     getSelectedContacts,
+    markTemplateApplied,
+    hasTemplateApplied,
     updateExportActionsVisibility,
     openRecordIdRequiredDialog,
     closeRecordIdRequiredDialog
