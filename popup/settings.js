@@ -392,7 +392,7 @@
     }
   }
 
-  function normalizeImportedTemplate(item) {
+  function normalizeImportedEmailTemplate(item) {
     if (!item || typeof item !== "object") return null;
     const rawName = String(item.name || "").trim();
     const rawSubject = String(item.subject || "").trim();
@@ -405,6 +405,17 @@
     };
   }
 
+  function normalizeImportedBasicTemplate(item) {
+    if (!item || typeof item !== "object") return null;
+    const rawName = String(item.name || "").trim();
+    const rawBody = String(item.body || "").trim();
+    if (!rawName && !rawBody) return null;
+    return {
+      name: rawName || "Untitled",
+      body: rawBody
+    };
+  }
+
   function parseImportedTemplates(text) {
     let payload;
     try {
@@ -413,18 +424,35 @@
       throw new Error("Invalid JSON file.");
     }
 
-    const source = Array.isArray(payload) ? payload : Array.isArray(payload?.templates) ? payload.templates : null;
-    if (!source) {
-      throw new Error("Invalid import format. Expected a templates array.");
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("Invalid import format. Expected an object with emailTemplates, whatsappTemplates, and noteTemplates arrays.");
     }
 
-    const templates = source.map(normalizeImportedTemplate).filter(Boolean);
-    if (!templates.length) {
+    if (!Array.isArray(payload.emailTemplates) || !Array.isArray(payload.whatsappTemplates) || !Array.isArray(payload.noteTemplates)) {
+      throw new Error("Invalid import format. Expected emailTemplates, whatsappTemplates, and noteTemplates arrays.");
+    }
+
+    const entries = [];
+
+    payload.emailTemplates.map(normalizeImportedEmailTemplate).filter(Boolean).forEach((template) => {
+      entries.push({ kind: "email", ...template });
+    });
+
+    payload.whatsappTemplates.map(normalizeImportedBasicTemplate).filter(Boolean).forEach((template) => {
+      entries.push({ kind: "whatsapp", ...template });
+    });
+
+    payload.noteTemplates.map(normalizeImportedBasicTemplate).filter(Boolean).forEach((template) => {
+      entries.push({ kind: "note", ...template });
+    });
+
+    if (!entries.length) {
       throw new Error("No valid templates found in the selected file.");
     }
 
-    return templates;
+    return entries;
   }
+
 
   function renderTemplateImportList() {
     if (!dom.templateImportListEl) return;
@@ -435,12 +463,13 @@
 
     dom.templateImportListEl.innerHTML = pendingImportTemplates
       .map((template, index) => {
-        const subjectPreview = template.subject || "No subject";
+        const kindLabel = template.kind === "email" ? "Email" : template.kind === "whatsapp" ? "WhatsApp" : "Note";
+        const preview = template.kind === "email" ? template.subject || "No subject" : template.body || "No content";
         return `
           <label class='template-import-item'>
             <input type='checkbox' data-import-index='${index}' checked />
-            <span class='template-import-item-title'>${App.escapeHtml(template.name)}</span>
-            <span class='template-import-item-meta'>${App.escapeHtml(subjectPreview.slice(0, 90))}</span>
+            <span class='template-import-item-title'>${App.escapeHtml(kindLabel)} - ${App.escapeHtml(template.name)}</span>
+            <span class='template-import-item-meta'>${App.escapeHtml(preview.slice(0, 90))}</span>
           </label>
         `;
       })
@@ -487,60 +516,112 @@
     }
 
     const mode = dom.templateImportModeReplaceInput?.checked ? "replace" : "add";
-    const next = App.normalizeEmailTemplates(state.settings.emailTemplates).map((template) => ({ ...template }));
-    const nameToIndex = new Map(next.map((template, index) => [normalizeNameKey(template.name), index]));
 
-    let added = 0;
-    let replaced = 0;
-    let skipped = 0;
+    const emailNext = App.normalizeEmailTemplates(state.settings.emailTemplates).map((template) => ({ ...template }));
+    const whatsappNext = App.normalizeWhatsappTemplates(state.settings.whatsappTemplates).map((template) => ({ ...template }));
+    const noteNext = App.normalizeNoteTemplates(state.settings.noteTemplates).map((template) => ({ ...template }));
+
+    const emailNameToIndex = new Map(emailNext.map((template, index) => [normalizeNameKey(template.name), index]));
+    const whatsappNameToIndex = new Map(whatsappNext.map((template, index) => [normalizeNameKey(template.name), index]));
+    const noteNameToIndex = new Map(noteNext.map((template, index) => [normalizeNameKey(template.name), index]));
+
+    const counts = {
+      email: { added: 0, replaced: 0 },
+      whatsapp: { added: 0, replaced: 0 },
+      note: { added: 0, replaced: 0 },
+      skipped: 0
+    };
 
     for (const index of selectedIndices) {
       const incoming = pendingImportTemplates[index];
       if (!incoming) {
-        skipped += 1;
+        counts.skipped += 1;
         continue;
       }
 
       const key = normalizeNameKey(incoming.name);
-      const matchIndex = mode === "replace" ? nameToIndex.get(key) : undefined;
-      if (mode === "replace" && Number.isInteger(matchIndex)) {
-        const current = next[matchIndex];
-        next[matchIndex] = {
-          ...current,
-          name: incoming.name,
-          subject: incoming.subject,
-          body: incoming.body
-        };
-        replaced += 1;
+
+      if (incoming.kind === "email") {
+        const matchIndex = mode === "replace" ? emailNameToIndex.get(key) : undefined;
+        if (mode === "replace" && Number.isInteger(matchIndex)) {
+          const current = emailNext[matchIndex];
+          emailNext[matchIndex] = { ...current, name: incoming.name, subject: incoming.subject || "", body: incoming.body || "" };
+          counts.email.replaced += 1;
+        } else {
+          const created = { id: App.makeTemplateId(), name: incoming.name, subject: incoming.subject || "", body: incoming.body || "" };
+          emailNext.push(created);
+          emailNameToIndex.set(key, emailNext.length - 1);
+          counts.email.added += 1;
+        }
         continue;
       }
 
-      const created = {
-        id: App.makeTemplateId(),
-        name: incoming.name,
-        subject: incoming.subject,
-        body: incoming.body
-      };
-      next.push(created);
-      nameToIndex.set(key, next.length - 1);
-      added += 1;
+      if (incoming.kind === "whatsapp") {
+        const matchIndex = mode === "replace" ? whatsappNameToIndex.get(key) : undefined;
+        if (mode === "replace" && Number.isInteger(matchIndex)) {
+          const current = whatsappNext[matchIndex];
+          whatsappNext[matchIndex] = { ...current, name: incoming.name, body: incoming.body || "" };
+          counts.whatsapp.replaced += 1;
+        } else {
+          const created = { id: App.makeTemplateId(), name: incoming.name, body: incoming.body || "" };
+          whatsappNext.push(created);
+          whatsappNameToIndex.set(key, whatsappNext.length - 1);
+          counts.whatsapp.added += 1;
+        }
+        continue;
+      }
+
+      if (incoming.kind === "note") {
+        const matchIndex = mode === "replace" ? noteNameToIndex.get(key) : undefined;
+        if (mode === "replace" && Number.isInteger(matchIndex)) {
+          const current = noteNext[matchIndex];
+          noteNext[matchIndex] = { ...current, name: incoming.name, body: incoming.body || "" };
+          counts.note.replaced += 1;
+        } else {
+          const created = { id: App.makeTemplateId(), name: incoming.name, body: incoming.body || "" };
+          noteNext.push(created);
+          noteNameToIndex.set(key, noteNext.length - 1);
+          counts.note.added += 1;
+        }
+        continue;
+      }
+
+      counts.skipped += 1;
     }
 
-    const normalized = App.normalizeEmailTemplates(next);
+    const emailNormalized = App.normalizeEmailTemplates(emailNext);
+    const whatsappNormalized = App.normalizeWhatsappTemplates(whatsappNext);
+    const noteNormalized = App.normalizeNoteTemplates(noteNext);
+
     state.settings = {
       ...state.settings,
-      emailTemplates: normalized
+      emailTemplates: emailNormalized,
+      whatsappTemplates: whatsappNormalized,
+      noteTemplates: noteNormalized
     };
-    await chrome.storage.local.set({ [constants.EMAIL_TEMPLATES_LOCAL_KEY]: normalized });
+
+    await chrome.storage.local.set({
+      [constants.EMAIL_TEMPLATES_LOCAL_KEY]: emailNormalized,
+      [constants.WHATSAPP_TEMPLATES_LOCAL_KEY]: whatsappNormalized,
+      [constants.NOTE_TEMPLATES_LOCAL_KEY]: noteNormalized
+    });
 
     if (!dom.emailTemplatesPageEl?.hidden) {
       App.loadEmailTemplatesDraftFromSettings();
       App.renderEmailTemplatesPage();
     }
+    if (!dom.whatsappTemplatesPageEl?.hidden) {
+      App.loadWhatsappTemplatesDraftFromSettings();
+      App.renderWhatsappTemplatesPage();
+    }
+    if (!dom.noteTemplatesPageEl?.hidden) {
+      App.loadNoteTemplatesDraftFromSettings();
+      App.renderNoteTemplatesPage();
+    }
 
     closeTemplateImportReview();
-    const summary = `Imported templates: ${added} added, ${replaced} replaced, ${skipped} skipped.`;
-    if (typeof App.showToast === "function") App.showToast(summary, 2800);
+    const summary = `Imported templates: Email ${counts.email.added} added / ${counts.email.replaced} replaced, WhatsApp ${counts.whatsapp.added} added / ${counts.whatsapp.replaced} replaced, Note ${counts.note.added} added / ${counts.note.replaced} replaced, ${counts.skipped} skipped.`;
+    if (typeof App.showToast === "function") App.showToast(summary, 3200);
     else App.setStatus(summary);
   }
 
@@ -582,20 +663,33 @@
   }
 
   function exportPersonalTemplates() {
-    const templates = App.normalizeEmailTemplates(state.settings.emailTemplates).map((template) => ({
+    const emailTemplates = App.normalizeEmailTemplates(state.settings.emailTemplates).map((template) => ({
       name: String(template.name || "").trim() || "Untitled",
       subject: String(template.subject || "").trim(),
       body: String(template.body || "").trim()
     }));
 
+    const whatsappTemplates = App.normalizeWhatsappTemplates(state.settings.whatsappTemplates).map((template) => ({
+      name: String(template.name || "").trim() || "Untitled",
+      body: String(template.body || "").trim()
+    }));
+
+    const noteTemplates = App.normalizeNoteTemplates(state.settings.noteTemplates).map((template) => ({
+      name: String(template.name || "").trim() || "Untitled",
+      body: String(template.body || "").trim()
+    }));
+
     const payload = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
-      templates
+      emailTemplates,
+      whatsappTemplates,
+      noteTemplates
     };
 
     downloadJson(buildExportFileName(), payload);
-    if (typeof App.showToast === "function") App.showToast(`Exported ${templates.length} template(s).`);
+    const total = emailTemplates.length + whatsappTemplates.length + noteTemplates.length;
+    if (typeof App.showToast === "function") App.showToast(`Exported ${total} template(s).`);
   }
 
   function triggerImportTemplatesPicker() {
@@ -708,7 +802,6 @@
 
     try {
       await persistSyncSettings(state.settings);
-      closeSettings();
       App.renderContacts();
       App.setStatus("Settings saved.");
       if (typeof App.showToast === "function") App.showToast("Settings saved.");
