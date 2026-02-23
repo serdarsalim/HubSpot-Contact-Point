@@ -26,6 +26,15 @@
   }
 
   async function waitForTabComplete(tabId, timeoutMs = timing.waitForTabCompleteTimeoutMs) {
+    try {
+      const existingTab = await chrome.tabs.get(tabId);
+      if (existingTab?.status === "complete") {
+        return;
+      }
+    } catch (_error) {
+      // Fall through to listener path; a later call will surface invalid tab errors.
+    }
+
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         chrome.tabs.onUpdated.removeListener(handleUpdated);
@@ -95,29 +104,57 @@
     throw new Error(lastError || "Could not read notes from HubSpot tab.");
   }
 
+  function extractContactRecordIdFromUrl(url) {
+    const match = String(url || "").match(/\/record\/0-1\/(\d+)/i);
+    return match ? match[1] : "";
+  }
+
+  function extractPortalIdFromContactUrl(url) {
+    const match = String(url || "").match(/\/contacts\/(\d+)\/record\/0-1\//i);
+    return match ? match[1] : "";
+  }
+
+  async function findExistingContactTab(recordId, portalId = "") {
+    const cleanId = String(recordId || "").replace(/\D/g, "");
+    const cleanPortalId = String(portalId || "").replace(/\D/g, "");
+    if (!cleanId) return null;
+
+    const tabs = await chrome.tabs.query({ url: ["https://app.hubspot.com/*"] });
+    const matchingTabs = tabs.filter((tab) => {
+      const tabRecordId = extractContactRecordIdFromUrl(tab?.url || "");
+      if (tabRecordId !== cleanId) return false;
+      if (!cleanPortalId) return true;
+      const tabPortalId = extractPortalIdFromContactUrl(tab?.url || "");
+      return tabPortalId === cleanPortalId;
+    });
+
+    if (!matchingTabs.length) return null;
+    matchingTabs.sort((a, b) => Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0));
+    return matchingTabs[0] || null;
+  }
+
   async function withContactTab(recordId, portalId, work) {
     const cleanId = String(recordId || "").replace(/\D/g, "");
     if (!cleanId) {
       throw new Error("Invalid Record ID.");
     }
 
+    const existingTab = await findExistingContactTab(cleanId, portalId);
+    if (existingTab && typeof existingTab.id === "number") {
+      await waitForTabComplete(existingTab.id);
+      await sleep(timing.contactTabPostLoadDelayMs);
+      return work(existingTab.id);
+    }
+
     const url = `https://app.hubspot.com/contacts/${portalId}/record/0-1/${cleanId}?interaction=note`;
-    const tab = await chrome.tabs.create({ url, active: false });
-    if (!tab || typeof tab.id !== "number") {
+    const openedTab = await chrome.tabs.create({ url, active: false });
+    if (!openedTab || typeof openedTab.id !== "number") {
       throw new Error("Could not open HubSpot contact tab.");
     }
 
-    try {
-      await waitForTabComplete(tab.id);
-      await sleep(timing.contactTabPostLoadDelayMs);
-      return await work(tab.id);
-    } finally {
-      try {
-        await chrome.tabs.remove(tab.id);
-      } catch (_error) {
-        // Ignore tab close failures.
-      }
-    }
+    await waitForTabComplete(openedTab.id);
+    await sleep(timing.contactTabPostLoadDelayMs);
+    return work(openedTab.id);
   }
 
   async function createSingleHubSpotNote(recordId, noteBody, portalId) {
@@ -213,6 +250,7 @@
     getPortalId,
     sendCreateNoteMessage,
     sendGetNotesMessage,
+    findExistingContactTab,
     withContactTab,
     createSingleHubSpotNote,
     readSingleHubSpotNotes,
