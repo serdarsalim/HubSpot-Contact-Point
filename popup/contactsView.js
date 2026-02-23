@@ -141,9 +141,10 @@
                 title='WhatsApp'
               >
                 <svg viewBox='0 0 24 24' aria-hidden='true'>
-                  <path d='M21 12a8.5 8.5 0 0 1-8.5 8.5H8l-4 3 1.5-4.5A8.5 8.5 0 1 1 21 12z'></path>
-                  <path d='M8.5 10.5h7'></path>
-                  <path d='M8.5 14h5'></path>
+                  <path d='M12 4c4.7 0 8.5 3.4 8.5 7.5S16.7 19 12 19c-1 0-2-.2-2.9-.5L4 20l1.4-3.8C4.5 14.9 4 13.2 4 11.5 4 7.4 7.8 4 12 4z'></path>
+                  <circle cx='9' cy='11.5' r='0.9'></circle>
+                  <circle cx='12' cy='11.5' r='0.9'></circle>
+                  <circle cx='15' cy='11.5' r='0.9'></circle>
                 </svg>
               </button>
               <button
@@ -166,8 +167,10 @@
                 title='Notes'
               >
                 <svg viewBox='0 0 24 24' aria-hidden='true'>
-                  <path d='M4 20h4l10-10-4-4L4 16v4z'></path>
-                  <path d='M12 8l4 4'></path>
+                  <path d='M4 3h12l4 4v14H4z'></path>
+                  <path d='M16 3v4h4'></path>
+                  <path d='M8 12h8'></path>
+                  <path d='M8 16h8'></path>
                 </svg>
               </button>
             </span>
