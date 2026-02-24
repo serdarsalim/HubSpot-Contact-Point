@@ -497,6 +497,34 @@
   }
 
   function findLabeledFieldValue(labelRegex, valueRegex, maxLen = 120) {
+    function isBlockedFieldValue(value) {
+      const normalized = cleanText(value || "").toLowerCase();
+      return !normalized || normalized === "details" || normalized === "--" || normalized === "-";
+    }
+
+    function splitLines(text) {
+      return String(text || "")
+        .split(/\n+/)
+        .map((line) => cleanText(line))
+        .filter(Boolean);
+    }
+
+    function extractFromLines(lines) {
+      for (let idx = 0; idx < lines.length; idx += 1) {
+        const line = lines[idx];
+        if (!labelRegex.test(line)) continue;
+        for (let j = idx + 1; j < Math.min(lines.length, idx + 5); j += 1) {
+          const candidate = cleanText(lines[j] || "");
+          if (isBlockedFieldValue(candidate)) continue;
+          if (labelRegex.test(candidate)) break;
+          if (!valueRegex || valueRegex.test(candidate)) {
+            return cleanSummaryText(candidate, maxLen);
+          }
+        }
+      }
+      return "";
+    }
+
     const labels = Array.from(document.querySelectorAll("label, dt, th, span, div, p, strong, h4, h5"));
     for (const node of labels) {
       if (!isVisible(node)) continue;
@@ -504,28 +532,36 @@
       if (!labelText || labelText.length > 60 || !labelRegex.test(labelText)) continue;
 
       const siblingText = cleanText(node.nextElementSibling?.textContent || "");
-      if (siblingText && !labelRegex.test(siblingText) && (!valueRegex || valueRegex.test(siblingText))) {
+      if (!isBlockedFieldValue(siblingText) && !labelRegex.test(siblingText) && (!valueRegex || valueRegex.test(siblingText))) {
         return cleanSummaryText(siblingText, maxLen);
       }
 
       const row = node.closest("li, tr, [role='row'], section, article, div");
-      const rowText = cleanText(row?.innerText || "");
-      if (rowText) {
-        const inlineMatch = rowText.match(new RegExp(`${labelRegex.source}\\s*[:\\-]?\\s*([^\\n]{2,${maxLen}})`, "i"));
-        const lineMatch = String(row?.innerText || "").match(new RegExp(`${labelRegex.source}\\s*\\n+\\s*([^\\n]{2,${maxLen}})`, "i"));
-        const extracted = cleanText((lineMatch?.[1] || inlineMatch?.[1] || "").trim());
-        if (extracted && !labelRegex.test(extracted) && (!valueRegex || valueRegex.test(extracted))) {
-          return cleanSummaryText(extracted, maxLen);
-        }
+      const rowLines = splitLines(row?.innerText || "");
+      const extractedFromRow = extractFromLines(rowLines);
+      if (extractedFromRow) {
+        return extractedFromRow;
       }
     }
+
+    const bodyLines = splitLines(document.body?.innerText || "");
+    const extractedFromBody = extractFromLines(bodyLines);
+    if (extractedFromBody) return extractedFromBody;
+
     return "";
   }
 
   function findActiveContactOwner() {
     const labeledOwner = findLabeledFieldValue(/\bcontact owner\b/i, /[a-z]/i, 70);
     if (labeledOwner && !/^(?:--|-|n\/a)$/i.test(labeledOwner)) {
-      return labeledOwner;
+      const cleanedOwner = cleanSummaryText(
+        labeledOwner
+          .replace(/^details\s+/i, "")
+          .replace(/\b(phone(?: number)?|email|city|country|office)\b.*$/i, "")
+          .trim(),
+        70
+      );
+      if (cleanedOwner) return cleanedOwner;
     }
 
     const ownerLabels = Array.from(document.querySelectorAll("label, dt, th, [data-test-id*='owner'], [data-selenium-test*='owner']"));
@@ -590,28 +626,58 @@
 
   function extractRecentTaskTitleFromText(text) {
     const raw = String(text || "");
+    const compact = cleanText(raw);
+    const dueMatch = compact.match(
+      /\bdue:\s*([0-9]{1,2}\s+[a-z]{3,9}\s+[0-9]{4}\s+at\s+[0-9]{1,2}:[0-9]{2})(?:\s*gmt[+-]\d{1,2})?/i
+    );
+    const dueText = cleanSummaryText(String(dueMatch?.[1] || "").trim(), 45);
+
     const lines = raw
       .split(/\n+/)
       .map((line) => cleanText(line))
       .filter(Boolean);
+
+    let title = "";
     for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
       const line = lines[idx];
       const lowered = line.toLowerCase();
-      if (lowered.includes("task assigned to") || lowered.startsWith("due:") || lowered.includes("task is incomplete")) {
+      if (
+        lowered.includes("task assigned to") ||
+        lowered.startsWith("due:") ||
+        lowered.includes("task is incomplete") ||
+        lowered.includes("click to mark")
+      ) {
         continue;
       }
       if (line.length >= 2 && line.length <= 110) {
-        return cleanSummaryText(line, 110);
+        title = cleanSummaryText(line, 80);
+        break;
       }
     }
 
-    const titleMatch = raw.match(/\btask\b\s*[:\-]?\s*([^|]{3,140})/i);
-    if (titleMatch) {
-      return cleanSummaryText(titleMatch[1], 110);
+    if (!title) {
+      const inlineTitleMatch = compact.match(
+        /\bdue:\s*[a-z0-9 ,:+-]{6,80}(?:\s*gmt[+-]\d{1,2})?\s+(.+?)(?:\s+task is incomplete\b|\s+click to mark\b|$)/i
+      );
+      if (inlineTitleMatch?.[1]) {
+        title = cleanSummaryText(inlineTitleMatch[1], 80);
+      }
     }
 
-    let fallback = raw.replace(/\b(task|completed|due|owner|assignee)\b/gi, " ");
-    return cleanSummaryText(fallback, 110);
+    if (!title) {
+      const titleMatch = compact.match(/\btask\b\s*[:\-]?\s*([^|]{3,140})/i);
+      if (titleMatch) {
+        title = cleanSummaryText(titleMatch[1], 80);
+      }
+    }
+
+    if (!title) {
+      let fallback = compact.replace(/\b(task|completed|due|owner|assignee)\b/gi, " ");
+      title = cleanSummaryText(fallback, 80);
+    }
+
+    if (!title) return "";
+    return dueText ? `${title}\nDue: ${dueText}` : title;
   }
 
   function collectRecentActivity(limit = 1) {

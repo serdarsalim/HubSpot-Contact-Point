@@ -81,6 +81,16 @@
     el.textContent = next || "-";
   }
 
+  function setMultilineText(el, value, fallback = "-") {
+    if (!el) return;
+    const next = String(value || "").trim();
+    if (!next) {
+      el.textContent = fallback;
+      return;
+    }
+    el.innerHTML = App.escapeHtml(next).replace(/\n/g, "<br>");
+  }
+
   function normalizePhoneDisplay(value) {
     return String(value || "")
       .replace(/^tel:/i, "")
@@ -160,7 +170,7 @@
         dom.activeTabLatestNoteEl.textContent = latestNote || "No recent notes";
       }
     }
-    setText(dom.activeTabLatestTaskEl, latestTask || "No recent tasks");
+    setMultilineText(dom.activeTabLatestTaskEl, latestTask, "No recent tasks");
     bindContactCardLinks(context);
   }
 
