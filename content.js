@@ -645,7 +645,9 @@
         lowered.includes("task assigned to") ||
         lowered.startsWith("due:") ||
         lowered.includes("task is incomplete") ||
-        lowered.includes("click to mark")
+        lowered.includes("click to mark") ||
+        lowered === "incomplete." ||
+        lowered === "incomplete"
       ) {
         continue;
       }

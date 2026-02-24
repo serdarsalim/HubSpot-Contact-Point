@@ -123,6 +123,18 @@
         });
       }
     }
+
+    if (dom.activeTabPhoneEl) {
+      const whatsappTemplateLink = dom.activeTabPhoneEl.querySelector("[data-active-tab-whatsapp-template]");
+      if (whatsappTemplateLink instanceof HTMLElement) {
+        whatsappTemplateLink.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (!isContact) return;
+          const key = activeTabKey(context);
+          App.openWhatsappTemplatePicker(context.contact, key);
+        });
+      }
+    }
   }
 
   function renderActiveTabContext() {
@@ -139,10 +151,20 @@
     const phoneValue = normalizePhoneDisplay(phoneRawValue);
 
     if (dom.activeTabPhoneEl) {
-      if (contact?.waUrl) {
-        dom.activeTabPhoneEl.innerHTML = `<a class='active-tab-phone-link' href='${App.escapeHtml(contact.waUrl)}' target='_blank' rel='noopener noreferrer'>${App.escapeHtml(
-          phoneValue || "Open WhatsApp"
-        )}</a>`;
+      if (kind === "contact" && contact) {
+        dom.activeTabPhoneEl.innerHTML = `
+          <span class="active-tab-phone-wrap">
+            <span>${App.escapeHtml(phoneValue || "-")}</span>
+            <a href="#" class="active-tab-whatsapp-link" data-active-tab-whatsapp-template="1" aria-label="WhatsApp templates" title="WhatsApp templates">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4c4.7 0 8.5 3.4 8.5 7.5S16.7 19 12 19c-1 0-2-.2-2.9-.5L4 20l1.4-3.8C4.5 14.9 4 13.2 4 11.5 4 7.4 7.8 4 12 4z"></path>
+                <circle cx="9" cy="11.5" r="0.9"></circle>
+                <circle cx="12" cy="11.5" r="0.9"></circle>
+                <circle cx="15" cy="11.5" r="0.9"></circle>
+              </svg>
+            </a>
+          </span>
+        `;
       } else {
         dom.activeTabPhoneEl.textContent = phoneValue || "-";
       }

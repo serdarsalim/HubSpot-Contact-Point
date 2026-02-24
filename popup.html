@@ -687,6 +687,42 @@
         text-decoration: underline;
       }
 
+      .active-tab-phone-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .active-tab-whatsapp-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        color: #0f8f45;
+        text-decoration: none;
+      }
+
+      .active-tab-whatsapp-link svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .active-tab-whatsapp-link:hover {
+        color: #0b7a3a;
+      }
+
+      .active-tab-whatsapp-link:focus-visible {
+        outline: 2px solid #0b66c3;
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+
       .notes-overlay {
         position: fixed;
         inset: 0;
@@ -1426,6 +1462,10 @@
 
       body[data-theme="dark"] .active-tab-inline-link {
         color: #82bdff;
+      }
+
+      body[data-theme="dark"] .active-tab-whatsapp-link {
+        color: #61d992;
       }
 
       body[data-theme="dark"] .email-template-list-btn.active {
