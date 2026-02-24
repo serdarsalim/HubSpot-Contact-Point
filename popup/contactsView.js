@@ -1,7 +1,6 @@
 (() => {
   const App = window.PopupApp;
   const { dom, state } = App;
-  const MT = App.messageTypes;
   const RECORD_ID_COLUMN_PATTERN = /^(record_id|recordid|hs_object_id|hs_objectid)$/i;
 
   function findRecordIdColumn(columns) {
@@ -295,9 +294,13 @@
 
     try {
       const loadAll = !!options.loadAll;
-      const tab = await App.findHubSpotTab();
+      const resolved = await App.findBestContactsTab({
+        countryPrefix: state.settings.countryPrefix,
+        messageText: state.settings.messageTemplate
+      });
+      const tab = resolved?.tab || null;
       if (!tab || typeof tab.id !== "number") {
-        App.setStatus("Open a HubSpot tab (app.hubspot.com), refresh it, and try again.");
+        App.setStatus("Open a HubSpot contacts table tab (app.hubspot.com), refresh it, and try again.");
         return;
       }
 
@@ -305,15 +308,16 @@
         App.setStatus("Loading all visible contacts from HubSpot table...");
       }
 
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        type: MT.GET_CONTACTS,
-        countryPrefix: state.settings.countryPrefix,
-        messageText: state.settings.messageTemplate,
-        loadAll
-      });
+      const response = loadAll
+        ? await App.sendGetContactsMessage(tab.id, {
+            countryPrefix: state.settings.countryPrefix,
+            messageText: state.settings.messageTemplate,
+            loadAll: true
+          })
+        : resolved.probeResponse;
 
-      if (!response || !response.ok) {
-        App.setStatus("Open a HubSpot tab (app.hubspot.com), refresh it, and try again.");
+      if (!App.isValidContactsPayload(response)) {
+        App.setStatus("Open a HubSpot contacts table tab (app.hubspot.com), refresh it, and try again.");
         return;
       }
 

@@ -25,6 +25,57 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function compareTabsByRecency(a, b) {
+    const aLast = Number(a?.lastAccessed || 0);
+    const bLast = Number(b?.lastAccessed || 0);
+    if (aLast !== bLast) return bLast - aLast;
+    return Number(b?.id || 0) - Number(a?.id || 0);
+  }
+
+  function isValidContactsPayload(response) {
+    if (!response || response.ok !== true) return false;
+    if (!Array.isArray(response.columns) || !response.columns.length) return false;
+    return true;
+  }
+
+  async function sendGetContactsMessage(tabId, { countryPrefix = "", messageText = "", loadAll = false } = {}) {
+    return chrome.tabs.sendMessage(tabId, {
+      type: MT.GET_CONTACTS,
+      countryPrefix: String(countryPrefix || ""),
+      messageText: String(messageText || ""),
+      loadAll: !!loadAll
+    });
+  }
+
+  async function findBestContactsTab({ countryPrefix = "", messageText = "" } = {}) {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const hubSpotTabs = await chrome.tabs.query({ url: ["https://app.hubspot.com/*"] });
+    if (!hubSpotTabs.length) return null;
+
+    const orderedCandidates = [];
+    if (activeTab && typeof activeTab.id === "number" && /^https:\/\/app\.hubspot\.com\//i.test(String(activeTab.url || ""))) {
+      orderedCandidates.push(activeTab);
+    }
+
+    const remaining = hubSpotTabs
+      .filter((tab) => tab?.id !== activeTab?.id)
+      .sort(compareTabsByRecency);
+    orderedCandidates.push(...remaining);
+
+    for (const tab of orderedCandidates) {
+      if (!tab || typeof tab.id !== "number") continue;
+      try {
+        const response = await sendGetContactsMessage(tab.id, { countryPrefix, messageText, loadAll: false });
+        if (!isValidContactsPayload(response)) continue;
+        return { tab, probeResponse: response };
+      } catch (_error) {
+        // Ignore tabs without an active content-script receiver and continue searching.
+      }
+    }
+
+    return null;
+  }
+
   async function waitForTabComplete(tabId, timeoutMs = timing.waitForTabCompleteTimeoutMs) {
     try {
       const existingTab = await chrome.tabs.get(tabId);
@@ -262,10 +313,13 @@
 
   Object.assign(App, {
     findHubSpotTab,
+    findBestContactsTab,
     extractPortalIdFromUrl,
+    isValidContactsPayload,
     sleep,
     waitForTabComplete,
     getPortalId,
+    sendGetContactsMessage,
     sendCreateNoteMessage,
     sendGetNotesMessage,
     findExistingContactTab,
