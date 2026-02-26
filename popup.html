@@ -1266,6 +1266,16 @@
         margin-bottom: 0;
       }
 
+      .email-template-meta-row {
+        display: flex;
+        gap: 12px;
+      }
+
+      .email-template-meta-row .field {
+        flex: 1 1 50%;
+        min-width: 0;
+      }
+
       .email-template-editor .field-grow {
         display: flex;
         flex-direction: column;
@@ -1312,6 +1322,13 @@
 
       .email-template-save-state[data-state="saved"] {
         color: #2f7a42;
+      }
+
+      @media (max-width: 620px) {
+        .email-template-meta-row {
+          flex-direction: column;
+          gap: 10px;
+        }
       }
 
       .email-template-save-state[data-state="error"] {
@@ -1818,13 +1835,15 @@
               <span id="emailTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
               <button id="deleteEmailTemplateBtn" class="btn danger" type="button">Delete Template</button>
             </div>
-            <div class="field">
-              <label for="emailTemplateNameInput">Template name</label>
-              <input id="emailTemplateNameInput" type="text" />
-            </div>
-            <div class="field">
-              <label for="emailTemplateSubjectInput">Subject</label>
-              <input id="emailTemplateSubjectInput" type="text" />
+            <div class="email-template-meta-row">
+              <div class="field">
+                <label for="emailTemplateNameInput">Template name</label>
+                <input id="emailTemplateNameInput" type="text" />
+              </div>
+              <div class="field">
+                <label for="emailTemplateSubjectInput">Subject</label>
+                <input id="emailTemplateSubjectInput" type="text" />
+              </div>
             </div>
             <div class="field field-grow">
               <label for="emailTemplateBodyInput">Body</label>
