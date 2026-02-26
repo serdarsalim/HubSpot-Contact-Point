@@ -8,7 +8,7 @@
     "blocks",
     "bold italic underline strikethrough",
     "bullist numlist",
-    "cp_addlink cp_openlink cp_unlink",
+    "cp_link",
     "forecolor backcolor",
     "alignleft aligncenter alignright",
     "removeformat",
@@ -23,6 +23,7 @@
   let autosaveQueued = false;
   let lastSavedDraftSignature = "";
   let formSyncReleaseTimerId = null;
+  let linkDialogOutsideClickCleanup = null;
 
   function htmlToPlainText(value) {
     const raw = String(value || "");
@@ -76,7 +77,9 @@
     return anchor && anchor.nodeType === 1 ? anchor : null;
   }
 
-  function getSelectedAnchor(editor) {
+  function getSelectedAnchor(editor, nodeHint = null) {
+    const hintedAnchor = getAnchorFromNode(nodeHint);
+    if (hintedAnchor) return hintedAnchor;
     const selectedNode = editor?.selection?.getNode?.();
     return getAnchorFromNode(selectedNode);
   }
@@ -90,8 +93,8 @@
     return `https://${value}`;
   }
 
-  function removeLinkAtSelection(editor) {
-    const anchor = getSelectedAnchor(editor);
+  function removeLinkAtSelection(editor, nodeHint = null) {
+    const anchor = getSelectedAnchor(editor, nodeHint);
     if (!anchor) return false;
     editor.undoManager.transact(() => {
       const parent = anchor.parentNode;
@@ -102,20 +105,20 @@
     return true;
   }
 
-  function upsertLinkAtSelection(editor) {
-    const anchor = getSelectedAnchor(editor);
-    const currentHref = String(anchor?.getAttribute("href") || "").trim();
-    const rawHref = window.prompt("Enter link URL", currentHref || "https://");
-    if (rawHref === null) return;
+  function upsertLinkAtSelection(editor, rawHref, rawText, nodeHint = null) {
+    const anchor = getSelectedAnchor(editor, nodeHint);
     const href = normalizeLinkHref(rawHref);
     if (!href) {
-      removeLinkAtSelection(editor);
+      removeLinkAtSelection(editor, nodeHint);
       return;
     }
 
     editor.undoManager.transact(() => {
       if (anchor) {
         anchor.setAttribute("href", href);
+        if (typeof rawText === "string" && rawText.trim()) {
+          anchor.textContent = rawText.trim();
+        }
         return;
       }
 
@@ -126,21 +129,116 @@
         return;
       }
 
-      const fallbackText = selectionText || href;
-      const rawText = window.prompt("Enter link text", fallbackText);
-      if (rawText === null) return;
-      const text = String(rawText || "").trim() || href;
+      const fallbackText = String(rawText || "").trim() || selectionText || href;
+      const text = fallbackText || href;
       editor.insertContent(`<a href="${escapeHtmlAttr(href)}">${App.escapeHtml(text)}</a>`);
     });
   }
 
-  function openSelectedLink(editor) {
-    const anchor = getSelectedAnchor(editor);
+  function openSelectedLink(editor, nodeHint = null, overrideHref = "") {
+    const hrefFromInput = normalizeLinkHref(overrideHref);
+    if (hrefFromInput) {
+      window.open(hrefFromInput, "_blank", "noopener,noreferrer");
+      return true;
+    }
+    const anchor = getSelectedAnchor(editor, nodeHint);
     if (!anchor) return false;
     const href = normalizeLinkHref(anchor.getAttribute("href"));
     if (!href) return false;
     window.open(href, "_blank", "noopener,noreferrer");
     return true;
+  }
+
+  function openLinkDialog(editor, nodeHint = null) {
+    const anchor = getSelectedAnchor(editor, nodeHint);
+    const selectedText = String(editor.selection?.getContent({ format: "text" }) || "").trim();
+    const anchorText = String(anchor?.textContent || "").trim();
+    const anchorHref = String(anchor?.getAttribute("href") || "").trim();
+    const initialHref = anchorHref || "https://";
+    const initialText = anchorText || selectedText;
+
+    if (typeof linkDialogOutsideClickCleanup === "function") {
+      linkDialogOutsideClickCleanup();
+      linkDialogOutsideClickCleanup = null;
+    }
+
+    const dialogApi = editor.windowManager.open({
+      title: "Link",
+      size: "normal",
+      closeOnClickOutside: true,
+      body: {
+        type: "panel",
+        items: [
+          {
+            type: "input",
+            name: "href",
+            label: "URL"
+          },
+          {
+            type: "input",
+            name: "text",
+            label: "Text"
+          }
+        ]
+      },
+      initialData: {
+        href: initialHref,
+        text: initialText
+      },
+      buttons: [
+        { type: "cancel", text: "Cancel" },
+        { type: "custom", name: "open", text: "Open in New Tab" },
+        { type: "custom", name: "unlink", text: "Unlink" },
+        { type: "submit", text: "Save", primary: true }
+      ],
+      onAction(api, details) {
+        if (details.name === "open") {
+          const href = String(api.getData().href || "").trim();
+          if (!openSelectedLink(editor, nodeHint, href)) {
+            App.setStatus("Provide a valid link to open.");
+          }
+          return;
+        }
+        if (details.name === "unlink") {
+          if (!removeLinkAtSelection(editor, nodeHint)) {
+            App.setStatus("Place cursor on a link to unlink it.");
+            return;
+          }
+          api.close();
+        }
+      },
+      onSubmit(api) {
+        const data = api.getData();
+        const href = String(data?.href || "").trim();
+        const text = String(data?.text || "").trim();
+        if (!href) {
+          App.setStatus("Link URL is required.");
+          return;
+        }
+        upsertLinkAtSelection(editor, href, text, nodeHint);
+        api.close();
+      },
+      onClose() {
+        if (typeof linkDialogOutsideClickCleanup === "function") {
+          linkDialogOutsideClickCleanup();
+          linkDialogOutsideClickCleanup = null;
+        }
+      }
+    });
+
+    const outsideClickHandler = (event) => {
+      const target = event?.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".tox-dialog")) return;
+      const isBackdrop = !!target.closest(".tox-dialog-wrap__backdrop");
+      const inDialogWrap = !!target.closest(".tox-dialog-wrap");
+      if (!isBackdrop && !inDialogWrap) return;
+      dialogApi.close();
+    };
+    document.addEventListener("mousedown", outsideClickHandler, true);
+    linkDialogOutsideClickCleanup = () => {
+      document.removeEventListener("mousedown", outsideClickHandler, true);
+    };
   }
 
   function setEmailTemplateSaveState(stateKey, text) {
@@ -304,26 +402,10 @@
         content_css: "default",
         content_style: "a[href] { cursor: pointer; }",
         setup(editor) {
-          editor.ui.registry.addButton("cp_addlink", {
+          editor.ui.registry.addButton("cp_link", {
             icon: "link",
-            tooltip: "Add/Edit Link",
-            onAction: () => upsertLinkAtSelection(editor)
-          });
-          editor.ui.registry.addButton("cp_unlink", {
-            icon: "unlink",
-            tooltip: "Remove Link",
-            onAction: () => {
-              removeLinkAtSelection(editor);
-            }
-          });
-          editor.ui.registry.addButton("cp_openlink", {
-            icon: "new-tab",
-            tooltip: "Open Link",
-            onAction: () => {
-              if (!openSelectedLink(editor)) {
-                App.setStatus("Place cursor on a link to open it.");
-              }
-            }
+            tooltip: "Link",
+            onAction: () => openLinkDialog(editor)
           });
           editor.on("change input undo redo keyup", () => {
             if (state.syncingEmailTemplateForm) return;
@@ -332,12 +414,16 @@
           editor.on("click", (event) => {
             const anchor = getAnchorFromNode(event.target);
             if (!anchor) return;
-            event.preventDefault();
             if (event.metaKey || event.ctrlKey) {
+              event.preventDefault();
               openSelectedLink(editor);
-              return;
             }
-            upsertLinkAtSelection(editor);
+          });
+          editor.on("dblclick", (event) => {
+            const anchor = getAnchorFromNode(event.target);
+            if (!anchor) return;
+            event.preventDefault();
+            openLinkDialog(editor, anchor);
           });
           editor.on("blur", () => {
             void flushEmailTemplateAutosave({ showToast: false });
