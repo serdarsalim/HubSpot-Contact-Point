@@ -104,6 +104,7 @@
     messageTemplateInput: document.getElementById("messageTemplateInput"),
     noteTemplateInput: document.getElementById("noteTemplateInput"),
     rowFilterInput: document.getElementById("rowFilterInput"),
+    cloudApiBaseUrlInput: document.getElementById("cloudApiBaseUrlInput"),
     cloudApiTokenInput: document.getElementById("cloudApiTokenInput"),
     saveCloudTokenBtn: document.getElementById("saveCloudTokenBtn"),
     refreshCloudTemplatesBtn: document.getElementById("refreshCloudTemplatesBtn"),
@@ -149,7 +150,7 @@
   const CLOUD_NOTE_CACHE_PREFIX = "popupCloudNoteTemplates::";
   const CLOUD_META_CACHE_PREFIX = "popupCloudTemplatesMeta::";
   const CLOUD_TEMPLATE_ID_PREFIX = "cloud_";
-  const CLOUD_API_BASE_URL = "https://contact-point-cloud-platform.vercel.app";
+  const CLOUD_API_BASE_URL = "https://contactpoint.vercel.app";
   const CLOUD_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const SELECTED_KEYS_SESSION_KEY = "popupSelectedContactKeys";
   const LEGACY_NOTE_TEXT = "Reached out on WhatsApp";
@@ -357,6 +358,17 @@
     return String(templateIdInput || "").replace(new RegExp(`^${CLOUD_TEMPLATE_ID_PREFIX}`), "");
   }
 
+  function normalizeCloudApiBaseUrl(value) {
+    const raw = String(value || "")
+      .trim()
+      .replace(/\/+$/g, "");
+    if (!raw) return CLOUD_API_BASE_URL;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) {
+      return `https://${raw}`;
+    }
+    return raw;
+  }
+
   function normalizeCloudAuth(raw) {
     if (!raw || typeof raw !== "object") return null;
     const apiToken = String(raw.apiToken || "").trim();
@@ -364,6 +376,7 @@
     if (!apiToken || !organizationId) return null;
     return {
       apiToken,
+      apiBaseUrl: normalizeCloudApiBaseUrl(raw.apiBaseUrl),
       organizationId,
       organizationName: String(raw.organizationName || "").trim(),
       organizationSlug: String(raw.organizationSlug || "").trim(),
@@ -893,6 +906,7 @@
     normalizeWhatsappTemplates,
     normalizeNoteTemplates,
     normalizeCloudAuth,
+    normalizeCloudApiBaseUrl,
     normalizeCloudTemplateArray,
     isCloudTemplateId,
     stripCloudTemplatePrefix,

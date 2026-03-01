@@ -73,7 +73,7 @@
 
     const orgName = auth.organizationName || auth.organizationSlug || auth.organizationId;
     const syncedAt = formatCloudSyncLabel(state.cloud.meta);
-    dom.cloudConnectionStatusEl.textContent = `Cloud templates: connected to ${orgName} (last sync: ${syncedAt})`;
+    dom.cloudConnectionStatusEl.textContent = `Cloud templates: connected to ${orgName} via ${auth.apiBaseUrl} (last sync: ${syncedAt})`;
   }
 
   function rerenderTemplateViewsForCloudChange() {
@@ -92,10 +92,11 @@
     }
   }
 
-  async function fetchCloudJson(path, token, timeoutMs = 12000) {
+  async function fetchCloudJson(path, token, apiBaseUrlInput, timeoutMs = 12000) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const url = `${constants.CLOUD_API_BASE_URL}${path}`;
+    const apiBaseUrl = App.normalizeCloudApiBaseUrl(apiBaseUrlInput);
+    const url = `${apiBaseUrl}${path}`;
 
     try {
       const response = await fetch(url, {
@@ -107,7 +108,7 @@
       });
       const payload = (await response.json().catch(() => null)) || {};
       if (!response.ok) {
-        const message = String(payload?.error || `Cloud request failed (${response.status})`).trim();
+        const message = String(payload?.error || `Cloud request failed (${response.status}) at ${apiBaseUrl}`).trim();
         throw new Error(message || "Cloud request failed.");
       }
       return payload;
@@ -264,6 +265,9 @@
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
     if (dom.cloudApiTokenInput) {
       dom.cloudApiTokenInput.value = String(state.cloud?.auth?.apiToken || "");
+    }
+    if (dom.cloudApiBaseUrlInput) {
+      dom.cloudApiBaseUrlInput.value = String(state.cloud?.auth?.apiBaseUrl || constants.CLOUD_API_BASE_URL);
     }
     renderCloudConnectionStatus();
     renderColumnChecks();
@@ -498,6 +502,9 @@
     if (dom.cloudApiTokenInput) {
       dom.cloudApiTokenInput.value = "";
     }
+    if (dom.cloudApiBaseUrlInput) {
+      dom.cloudApiBaseUrlInput.value = String(constants.CLOUD_API_BASE_URL);
+    }
 
     renderCloudConnectionStatus();
     rerenderTemplateViewsForCloudChange();
@@ -540,7 +547,7 @@
     }
 
     try {
-      const me = await fetchCloudJson("/api/v1/extension/me", auth.apiToken);
+      const me = await fetchCloudJson("/api/v1/extension/me", auth.apiToken, auth.apiBaseUrl);
       const nextAuth = App.normalizeCloudAuth({
         ...auth,
         organizationId: me?.organization?.id,
@@ -562,7 +569,7 @@
         await loadCloudCacheFromStorage(nextAuth);
       }
 
-      const remoteMeta = await fetchCloudJson("/api/v1/extension/templates/meta", nextAuth.apiToken);
+      const remoteMeta = await fetchCloudJson("/api/v1/extension/templates/meta", nextAuth.apiToken, nextAuth.apiBaseUrl);
       const nowIso = new Date().toISOString();
       const localMeta = state.cloud.meta && typeof state.cloud.meta === "object" ? state.cloud.meta : null;
       const hasCachedTemplates =
@@ -578,7 +585,11 @@
       };
 
       if (needsFullSync) {
-        const templatesPayload = await fetchCloudJson("/api/v1/extension/templates", nextAuth.apiToken);
+        const templatesPayload = await fetchCloudJson(
+          "/api/v1/extension/templates",
+          nextAuth.apiToken,
+          nextAuth.apiBaseUrl
+        );
         const split = splitCloudTemplatesByType(templatesPayload?.templates);
         const emailTemplates = App.normalizeCloudTemplateArray(split.email, "EMAIL");
         const whatsappTemplates = App.normalizeCloudTemplateArray(split.whatsapp, "WHATSAPP");
@@ -645,6 +656,8 @@
 
   async function saveCloudApiToken() {
     const rawToken = String(dom.cloudApiTokenInput?.value || "").trim();
+    const rawApiBaseUrl = String(dom.cloudApiBaseUrlInput?.value || "").trim();
+    const apiBaseUrl = App.normalizeCloudApiBaseUrl(rawApiBaseUrl);
 
     if (!rawToken) {
       await clearCloudConnection({ showToast: true, statusMessage: "Cloud API token removed." });
@@ -656,9 +669,10 @@
     App.setStatus("Validating cloud API token...");
 
     try {
-      const me = await fetchCloudJson("/api/v1/extension/me", rawToken);
+      const me = await fetchCloudJson("/api/v1/extension/me", rawToken, apiBaseUrl);
       const nextAuth = App.normalizeCloudAuth({
         apiToken: rawToken,
+        apiBaseUrl,
         organizationId: me?.organization?.id,
         organizationName: me?.organization?.name,
         organizationSlug: me?.organization?.slug,
@@ -687,7 +701,10 @@
     } catch (error) {
       state.cloud.auth = previousAuth || null;
       await loadCloudCacheFromStorage(state.cloud.auth);
-      const reason = String(error?.message || "Could not validate cloud API token.");
+      const rawReason = String(error?.message || "Could not validate cloud API token.");
+      const reason = rawReason.includes("404")
+        ? `${rawReason}. Check Cloud API URL and ensure the backend is running/deployed.`
+        : rawReason;
       renderCloudConnectionStatus(`Cloud templates: ${reason}`);
       App.setStatus(`Cloud token failed: ${reason}`);
       if (typeof App.showToast === "function") {
@@ -1119,6 +1136,9 @@
       noteTemplates
     };
     state.cloud.auth = App.normalizeCloudAuth(savedCloudAuth);
+    if (!state.cloud.auth && dom.cloudApiBaseUrlInput) {
+      dom.cloudApiBaseUrlInput.value = String(constants.CLOUD_API_BASE_URL);
+    }
     state.settings.messageTemplate = "";
     state.settings.noteTemplate = "";
     state.settings.themeMode = App.normalizeThemeMode(state.settings.themeMode);
