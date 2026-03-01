@@ -108,8 +108,11 @@
       });
       const payload = (await response.json().catch(() => null)) || {};
       if (!response.ok) {
-        const message = String(payload?.error || `Cloud request failed (${response.status}) at ${apiBaseUrl}`).trim();
-        throw new Error(message || "Cloud request failed.");
+        const message = String(payload?.error || ("Cloud request failed (" + response.status + ") at " + apiBaseUrl)).trim();
+        const requestError = new Error(message || "Cloud request failed.");
+        requestError.status = Number(response.status || 0);
+        requestError.code = String(payload?.code || "").trim();
+        throw requestError;
       }
       return payload;
     } catch (error) {
@@ -120,6 +123,20 @@
     } finally {
       clearTimeout(timeoutId);
     }
+  }
+
+  function shouldDisconnectCloudAuth(error) {
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || "").trim().toLowerCase();
+    const message = String(error?.message || "").toLowerCase();
+
+    if (status === 401 || status === 403) return true;
+
+    if (code === "invalid_api_token" || code === "missing_authorization_header" || code === "invalid_authorization_scheme" || code === "empty_bearer_token") {
+      return true;
+    }
+
+    return message.includes("invalid or revoked api token") || message.includes("revoked");
   }
 
   async function loadCloudCacheFromStorage(authInput = state.cloud.auth) {
@@ -489,6 +506,7 @@
   async function clearCloudConnection(options = {}) {
     const showToast = options?.showToast !== false;
     const statusMessage = String(options?.statusMessage || "Cloud API token removed.");
+    const previousOrgId = String(state.cloud?.auth?.organizationId || "").trim();
 
     state.cloud.auth = null;
     state.cloud.emailTemplates = [];
@@ -497,7 +515,16 @@
     state.cloud.meta = null;
     state.cloud.status = statusMessage;
 
-    await chrome.storage.local.remove([constants.CLOUD_AUTH_LOCAL_KEY]);
+    const keysToRemove = [constants.CLOUD_AUTH_LOCAL_KEY];
+
+    if (previousOrgId) {
+      const previousCacheKeys = getCloudCacheKeys(previousOrgId);
+      if (previousCacheKeys) {
+        keysToRemove.push(previousCacheKeys.emailKey, previousCacheKeys.whatsappKey, previousCacheKeys.noteKey, previousCacheKeys.metaKey);
+      }
+    }
+
+    await chrome.storage.local.remove(keysToRemove);
 
     if (dom.cloudApiTokenInput) {
       dom.cloudApiTokenInput.value = "";
@@ -643,12 +670,20 @@
       return { ok: true, fullSync: needsFullSync };
     } catch (error) {
       const reason = String(error?.message || "Cloud sync failed.");
-      renderCloudConnectionStatus(`Cloud templates: ${reason}`);
+      if (shouldDisconnectCloudAuth(error)) {
+        await clearCloudConnection({
+          showToast,
+          statusMessage: "Cloud token is invalid or revoked. Cloud templates disconnected."
+        });
+        return { ok: false, error: reason };
+      }
+
+      renderCloudConnectionStatus("Cloud templates: " + reason);
       if (!silent) {
-        App.setStatus(`Cloud sync failed: ${reason}`);
+        App.setStatus("Cloud sync failed: " + reason);
       }
       if (showToast && typeof App.showToast === "function") {
-        App.showToast(`Cloud sync failed: ${reason}`, 3200);
+        App.showToast("Cloud sync failed: " + reason, 3200);
       }
       return { ok: false, error: reason };
     }
@@ -713,7 +748,19 @@
   }
 
   async function refreshCloudTemplatesNow() {
-    await refreshCloudTemplates({ force: true, showToast: true, silent: false });
+    if (dom.refreshCloudTemplatesBtn) {
+      dom.refreshCloudTemplatesBtn.classList.add("is-spinning");
+      dom.refreshCloudTemplatesBtn.disabled = true;
+    }
+
+    try {
+      await refreshCloudTemplates({ force: true, showToast: true, silent: false });
+    } finally {
+      if (dom.refreshCloudTemplatesBtn) {
+        dom.refreshCloudTemplatesBtn.classList.remove("is-spinning");
+        dom.refreshCloudTemplatesBtn.disabled = false;
+      }
+    }
   }
 
   async function refreshCloudTemplatesSessionCheck() {
