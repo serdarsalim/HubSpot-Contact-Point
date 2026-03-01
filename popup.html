@@ -1025,13 +1025,25 @@
         margin-bottom: 6px;
       }
 
-      .field input[type="text"] {
+      .field input[type="text"],
+      .field input[type="password"] {
         width: 100%;
         box-sizing: border-box;
         border: 1px solid var(--line);
         border-radius: 10px;
         padding: 10px;
         font-size: 14px;
+      }
+
+      .cloud-token-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .cloud-token-row .btn {
+        white-space: nowrap;
       }
 
       .field select {
@@ -1140,6 +1152,10 @@
 
       @media (max-width: 620px) {
         .checks {
+          grid-template-columns: 1fr;
+        }
+
+        .cloud-token-row {
           grid-template-columns: 1fr;
         }
       }
@@ -1266,6 +1282,33 @@
         display: block;
         font-size: 13px;
         font-weight: 600;
+      }
+
+      .email-template-list-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .template-source-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .template-source-pill.cloud {
+        background: #dbeafe;
+        color: #1e3a8a;
+      }
+
+      .template-source-pill.local {
+        background: #dcfce7;
+        color: #166534;
       }
 
       .email-template-list-btn.active .email-template-list-name {
@@ -1452,6 +1495,13 @@
         gap: 8px;
       }
 
+      .email-template-pick-title-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+
       .email-template-pick-used {
         width: 18px;
         min-width: 18px;
@@ -1479,6 +1529,12 @@
 
       .template-note-spacer {
         height: 18px;
+      }
+
+      .template-readonly-note {
+        margin: 0;
+        font-size: 12px;
+        color: #53657a;
       }
 
       .app-toast {
@@ -1665,6 +1721,20 @@
         color: #b7d4f8;
       }
 
+      body[data-theme="dark"] .template-source-pill.cloud {
+        background: #233754;
+        color: #9ac1f8;
+      }
+
+      body[data-theme="dark"] .template-source-pill.local {
+        background: #1f3a31;
+        color: #9de5bd;
+      }
+
+      body[data-theme="dark"] .template-readonly-note {
+        color: #9ab1cb;
+      }
+
       body[data-theme="dark"] .row-quick-note-input {
         border: 0;
         background: rgba(27, 42, 60, 0.68);
@@ -1698,6 +1768,7 @@
       }
 
       body[data-theme="dark"] .field input[type="text"],
+      body[data-theme="dark"] .field input[type="password"],
       body[data-theme="dark"] .field select,
       body[data-theme="dark"] .field textarea {
         background: #1a2a3e;
@@ -1964,12 +2035,22 @@
         </div>
 
         <div class="field">
+          <label for="cloudApiTokenInput">Cloud API token</label>
+          <div class="cloud-token-row">
+            <input id="cloudApiTokenInput" type="password" placeholder="Paste API token" autocomplete="off" />
+            <button id="saveCloudTokenBtn" class="btn" type="button">Save</button>
+            <button id="refreshCloudTemplatesBtn" class="btn" type="button">Refresh templates</button>
+          </div>
+          <p id="cloudConnectionStatus" class="template-import-summary">Cloud templates: disconnected</p>
+        </div>
+
+        <div class="field">
           <label>Columns to show</label>
           <div id="columnChecks" class="checks"></div>
         </div>
 
         <div class="field">
-          <label>Template Data</label>
+          <label>Local Template Data</label>
           <div class="template-data-actions">
             <button id="exportTemplatesBtn" class="btn" type="button">Export Personal Templates</button>
             <button id="importTemplatesBtn" class="btn" type="button">Import Personal Templates</button>

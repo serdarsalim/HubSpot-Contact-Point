@@ -11,6 +11,16 @@
   if (dom.noteSettingsBtn) dom.noteSettingsBtn.addEventListener("click", App.toggleNoteSettings);
   dom.cancelSettingsBtn.addEventListener("click", App.closeSettings);
   dom.saveSettingsBtn.addEventListener("click", App.saveSettings);
+  if (dom.saveCloudTokenBtn) {
+    dom.saveCloudTokenBtn.addEventListener("click", () => {
+      void App.saveCloudApiToken();
+    });
+  }
+  if (dom.refreshCloudTemplatesBtn) {
+    dom.refreshCloudTemplatesBtn.addEventListener("click", () => {
+      void App.refreshCloudTemplatesNow();
+    });
+  }
 
   if (dom.addEmailTemplateBtn) {
     dom.addEmailTemplateBtn.addEventListener("click", App.addEmailTemplateDraft);
@@ -130,7 +140,11 @@
 
       const templateId = String(button.getAttribute("data-template-id") || "");
       if (!templateId) return;
-      const template = App.normalizeEmailTemplates(state.settings.emailTemplates).find((item) => item.id === templateId) || null;
+      const templateSource =
+        typeof App.getMergedEmailTemplates === "function"
+          ? App.getMergedEmailTemplates()
+          : App.normalizeEmailTemplates(state.settings.emailTemplates);
+      const template = templateSource.find((item) => item.id === templateId) || null;
       const contact = state.emailTemplatePickState.contact;
       const key = state.emailTemplatePickState.key;
       App.closeEmailTemplatePicker();
@@ -147,7 +161,11 @@
 
       const templateId = String(button.getAttribute("data-template-id") || "");
       if (!templateId) return;
-      const template = App.normalizeWhatsappTemplates(state.settings.whatsappTemplates).find((item) => item.id === templateId) || null;
+      const templateSource =
+        typeof App.getMergedWhatsappTemplates === "function"
+          ? App.getMergedWhatsappTemplates()
+          : App.normalizeWhatsappTemplates(state.settings.whatsappTemplates);
+      const template = templateSource.find((item) => item.id === templateId) || null;
       const contact = state.whatsappTemplatePickState.contact;
       const key = state.whatsappTemplatePickState.key;
       App.closeWhatsappTemplatePicker();
@@ -214,6 +232,9 @@
       await App.restoreSelectedKeysFromSession();
     }
     await App.loadSettings();
+    if (typeof App.refreshCloudTemplatesSessionCheck === "function") {
+      void App.refreshCloudTemplatesSessionCheck();
+    }
     await App.loadContacts({ loadAll: true });
     App.updateStickyHeadOffset();
   }

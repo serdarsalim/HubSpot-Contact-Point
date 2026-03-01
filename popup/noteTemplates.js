@@ -102,23 +102,68 @@
     setNoteTemplateSaveState("saved", "Saved");
   }
 
+  function getMergedNoteTemplates() {
+    if (typeof App.getMergedNoteTemplates === "function") {
+      return App.getMergedNoteTemplates();
+    }
+    return App.normalizeNoteTemplates(state.settings.noteTemplates).map((template) => ({
+      ...template,
+      source: "local",
+      readOnly: false,
+      type: "NOTE"
+    }));
+  }
+
   function getActiveNoteTemplateDraft() {
     return state.noteTemplatesDraft.find((template) => template.id === state.activeNoteTemplateId) || null;
   }
 
+  function getActiveNoteTemplateAny() {
+    const templates = getMergedNoteTemplates();
+    return templates.find((template) => template.id === state.activeNoteTemplateId) || null;
+  }
+
+  function isCloudTemplate(template) {
+    if (!template) return false;
+    if (template.readOnly === true || template.source === "cloud") return true;
+    if (typeof App.isCloudTemplateId === "function") return App.isCloudTemplateId(template.id);
+    return false;
+  }
+
+  function setNoteEditorReadOnly(readOnly) {
+    const nextReadOnly = !!readOnly;
+    if (dom.noteTemplateNameInput) dom.noteTemplateNameInput.disabled = nextReadOnly;
+    if (dom.noteTemplateBodyInput) {
+      dom.noteTemplateBodyInput.readOnly = nextReadOnly;
+      dom.noteTemplateBodyInput.disabled = nextReadOnly;
+    }
+    if (dom.deleteNoteTemplateBtn) dom.deleteNoteTemplateBtn.hidden = nextReadOnly;
+    setNoteTemplateSaveState("saved", nextReadOnly ? "Cloud read-only" : "Saved");
+  }
+
   function renderNoteTemplatesList() {
+    const templates = getMergedNoteTemplates();
     if (!dom.noteTemplatesListEl) return;
-    if (!state.noteTemplatesDraft.length) {
+    if (!templates.length) {
       dom.noteTemplatesListEl.innerHTML = "<div class='email-template-empty'>No templates yet.</div>";
       return;
     }
 
-    dom.noteTemplatesListEl.innerHTML = state.noteTemplatesDraft
+    if (!templates.some((template) => template.id === state.activeNoteTemplateId)) {
+      state.activeNoteTemplateId = templates[0]?.id || "";
+    }
+
+    dom.noteTemplatesListEl.innerHTML = templates
       .map((template) => {
         const activeClass = template.id === state.activeNoteTemplateId ? "active" : "";
+        const sourceClass = template.source === "cloud" ? "cloud" : "local";
+        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
         return `
         <button type='button' class='email-template-list-btn ${activeClass}' data-template-id='${App.escapeHtml(template.id)}'>
-          <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+          <span class='email-template-list-head'>
+            <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+            <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+          </span>
         </button>
       `;
       })
@@ -126,17 +171,22 @@
   }
 
   function renderActiveNoteTemplateEditor() {
-    const active = getActiveNoteTemplateDraft();
+    const active = getActiveNoteTemplateAny();
     const hasActive = !!active;
+    const activeIsCloud = isCloudTemplate(active);
 
     if (dom.noteTemplateEmptyEl) dom.noteTemplateEmptyEl.hidden = hasActive;
     if (dom.noteTemplateEditorEl) dom.noteTemplateEditorEl.hidden = !hasActive;
-    if (!hasActive) return;
+    if (!hasActive) {
+      setNoteEditorReadOnly(false);
+      return;
+    }
 
     state.syncingNoteTemplateForm = true;
     if (dom.noteTemplateNameInput) dom.noteTemplateNameInput.value = active.name || "";
     if (dom.noteTemplateBodyInput) dom.noteTemplateBodyInput.value = active.body || "";
     state.syncingNoteTemplateForm = false;
+    setNoteEditorReadOnly(activeIsCloud);
   }
 
   function renderNoteTemplatesPage() {
@@ -146,6 +196,7 @@
 
   function upsertActiveNoteTemplateFromForm() {
     if (state.syncingNoteTemplateForm) return;
+    if (typeof App.isCloudTemplateId === "function" && App.isCloudTemplateId(state.activeNoteTemplateId)) return;
     const active = getActiveNoteTemplateDraft();
     if (!active) return;
 
@@ -169,6 +220,7 @@
   }
 
   function deleteActiveNoteTemplateDraft() {
+    if (typeof App.isCloudTemplateId === "function" && App.isCloudTemplateId(state.activeNoteTemplateId)) return;
     if (!state.activeNoteTemplateId) return;
     state.noteTemplatesDraft = state.noteTemplatesDraft.filter((template) => template.id !== state.activeNoteTemplateId);
     if (!state.noteTemplatesDraft.length) {
@@ -181,13 +233,16 @@
 
   function renderNotesTemplateSelectOptions(selectedId = "") {
     if (!dom.notesTemplateSelect) return;
-    const templates = App.normalizeNoteTemplates(state.settings.noteTemplates);
+    const templates = getMergedNoteTemplates();
     const selected = String(selectedId || "");
 
     const options = ["<option value=''>Custom note</option>"];
     for (const template of templates) {
       const isSelected = template.id === selected ? "selected" : "";
-      options.push(`<option value='${App.escapeHtml(template.id)}' ${isSelected}>${App.escapeHtml(template.name || "Untitled")}</option>`);
+      const suffix = template.source === "cloud" ? " (Cloud)" : "";
+      options.push(
+        `<option value='${App.escapeHtml(template.id)}' ${isSelected}>${App.escapeHtml(template.name || "Untitled")}${suffix}</option>`
+      );
     }
     dom.notesTemplateSelect.innerHTML = options.join("");
   }
@@ -195,7 +250,7 @@
   function applySelectedNoteTemplateToInput() {
     if (!dom.notesTemplateSelect || !dom.notesTextInput) return;
     const selectedId = String(dom.notesTemplateSelect.value || "").trim();
-    const templates = App.normalizeNoteTemplates(state.settings.noteTemplates);
+    const templates = getMergedNoteTemplates();
     const selectedTemplate = templates.find((template) => template.id === selectedId) || null;
     if (!selectedTemplate) return;
     dom.notesTextInput.value = String(selectedTemplate.body || "").trim();

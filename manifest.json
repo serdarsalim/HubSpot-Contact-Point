@@ -8,7 +8,8 @@
     "tabs"
   ],
   "host_permissions": [
-    "https://us.i.posthog.com/*"
+    "https://us.i.posthog.com/*",
+    "https://contact-point-cloud-platform.vercel.app/*"
   ],
   "icons": {
     "16": "icons/icon-16.png",

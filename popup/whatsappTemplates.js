@@ -106,23 +106,68 @@
     setWhatsappTemplateSaveState("saved", "Saved");
   }
 
+  function getMergedWhatsappTemplates() {
+    if (typeof App.getMergedWhatsappTemplates === "function") {
+      return App.getMergedWhatsappTemplates();
+    }
+    return App.normalizeWhatsappTemplates(state.settings.whatsappTemplates).map((template) => ({
+      ...template,
+      source: "local",
+      readOnly: false,
+      type: "WHATSAPP"
+    }));
+  }
+
   function getActiveWhatsappTemplateDraft() {
     return state.whatsappTemplatesDraft.find((template) => template.id === state.activeWhatsappTemplateId) || null;
   }
 
+  function getActiveWhatsappTemplateAny() {
+    const templates = getMergedWhatsappTemplates();
+    return templates.find((template) => template.id === state.activeWhatsappTemplateId) || null;
+  }
+
+  function isCloudTemplate(template) {
+    if (!template) return false;
+    if (template.readOnly === true || template.source === "cloud") return true;
+    if (typeof App.isCloudTemplateId === "function") return App.isCloudTemplateId(template.id);
+    return false;
+  }
+
+  function setWhatsappEditorReadOnly(readOnly) {
+    const nextReadOnly = !!readOnly;
+    if (dom.whatsappTemplateNameInput) dom.whatsappTemplateNameInput.disabled = nextReadOnly;
+    if (dom.whatsappTemplateBodyInput) {
+      dom.whatsappTemplateBodyInput.readOnly = nextReadOnly;
+      dom.whatsappTemplateBodyInput.disabled = nextReadOnly;
+    }
+    if (dom.deleteWhatsappTemplateBtn) dom.deleteWhatsappTemplateBtn.hidden = nextReadOnly;
+    setWhatsappTemplateSaveState("saved", nextReadOnly ? "Cloud read-only" : "Saved");
+  }
+
   function renderWhatsappTemplatesList() {
+    const templates = getMergedWhatsappTemplates();
     if (!dom.whatsappTemplatesListEl) return;
-    if (!state.whatsappTemplatesDraft.length) {
+    if (!templates.length) {
       dom.whatsappTemplatesListEl.innerHTML = "<div class='email-template-empty'>No templates yet.</div>";
       return;
     }
 
-    dom.whatsappTemplatesListEl.innerHTML = state.whatsappTemplatesDraft
+    if (!templates.some((template) => template.id === state.activeWhatsappTemplateId)) {
+      state.activeWhatsappTemplateId = templates[0]?.id || "";
+    }
+
+    dom.whatsappTemplatesListEl.innerHTML = templates
       .map((template) => {
         const activeClass = template.id === state.activeWhatsappTemplateId ? "active" : "";
+        const sourceClass = template.source === "cloud" ? "cloud" : "local";
+        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
         return `
         <button type='button' class='email-template-list-btn ${activeClass}' data-template-id='${App.escapeHtml(template.id)}'>
-          <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+          <span class='email-template-list-head'>
+            <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+            <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+          </span>
         </button>
       `;
       })
@@ -130,17 +175,22 @@
   }
 
   function renderActiveWhatsappTemplateEditor() {
-    const active = getActiveWhatsappTemplateDraft();
+    const active = getActiveWhatsappTemplateAny();
     const hasActive = !!active;
+    const activeIsCloud = isCloudTemplate(active);
 
     if (dom.whatsappTemplateEmptyEl) dom.whatsappTemplateEmptyEl.hidden = hasActive;
     if (dom.whatsappTemplateEditorEl) dom.whatsappTemplateEditorEl.hidden = !hasActive;
-    if (!hasActive) return;
+    if (!hasActive) {
+      setWhatsappEditorReadOnly(false);
+      return;
+    }
 
     state.syncingWhatsappTemplateForm = true;
     if (dom.whatsappTemplateNameInput) dom.whatsappTemplateNameInput.value = active.name || "";
     if (dom.whatsappTemplateBodyInput) dom.whatsappTemplateBodyInput.value = active.body || "";
     state.syncingWhatsappTemplateForm = false;
+    setWhatsappEditorReadOnly(activeIsCloud);
   }
 
   function renderWhatsappTemplatesPage() {
@@ -150,6 +200,7 @@
 
   function upsertActiveWhatsappTemplateFromForm() {
     if (state.syncingWhatsappTemplateForm) return;
+    if (typeof App.isCloudTemplateId === "function" && App.isCloudTemplateId(state.activeWhatsappTemplateId)) return;
     const active = getActiveWhatsappTemplateDraft();
     if (!active) return;
 
@@ -173,6 +224,7 @@
   }
 
   function deleteActiveWhatsappTemplateDraft() {
+    if (typeof App.isCloudTemplateId === "function" && App.isCloudTemplateId(state.activeWhatsappTemplateId)) return;
     if (!state.activeWhatsappTemplateId) return;
     state.whatsappTemplatesDraft = state.whatsappTemplatesDraft.filter((template) => template.id !== state.activeWhatsappTemplateId);
     if (!state.whatsappTemplatesDraft.length) {
@@ -185,7 +237,7 @@
 
   function renderWhatsappTemplatePickerOptions() {
     if (!dom.whatsappTemplatePickList) return;
-    const templates = App.normalizeWhatsappTemplates(state.settings.whatsappTemplates);
+    const templates = getMergedWhatsappTemplates();
     const query = String(state.whatsappTemplatePickState?.query || "")
       .trim()
       .toLowerCase();
@@ -197,7 +249,7 @@
         })
       : templates;
     if (!templates.length) {
-      dom.whatsappTemplatePickList.innerHTML = "<div class='email-template-empty'>No templates found. Add one via the WhatsApp icon.</div>";
+      dom.whatsappTemplatePickList.innerHTML = "<div class='email-template-empty'>No templates found.</div>";
       return;
     }
     if (!matchingTemplates.length) {
@@ -209,13 +261,16 @@
       .map((template) => {
         const preview = templatePreviewText(template);
         const isAppliedForContact = App.hasTemplateApplied("whatsapp", state.whatsappTemplatePickState.key, template.id);
+        const sourceClass = template.source === "cloud" ? "cloud" : "local";
+        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
         return `
         <button type='button' class='email-template-pick-item' data-template-id='${App.escapeHtml(template.id)}'>
           <span class='email-template-pick-head'>
-            <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
-            <span class='email-template-pick-used ${isAppliedForContact ? "is-used" : ""}' aria-hidden='true'>${
-              isAppliedForContact ? "✓" : ""
-            }</span>
+            <span class='email-template-pick-title-wrap'>
+              <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+              <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+            </span>
+            <span class='email-template-pick-used ${isAppliedForContact ? "is-used" : ""}' aria-hidden='true'>${isAppliedForContact ? "✓" : ""}</span>
           </span>
           <span class='email-template-pick-preview'>${App.escapeHtml(preview.slice(0, 120) || "No message yet")}</span>
         </button>

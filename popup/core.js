@@ -104,6 +104,10 @@
     messageTemplateInput: document.getElementById("messageTemplateInput"),
     noteTemplateInput: document.getElementById("noteTemplateInput"),
     rowFilterInput: document.getElementById("rowFilterInput"),
+    cloudApiTokenInput: document.getElementById("cloudApiTokenInput"),
+    saveCloudTokenBtn: document.getElementById("saveCloudTokenBtn"),
+    refreshCloudTemplatesBtn: document.getElementById("refreshCloudTemplatesBtn"),
+    cloudConnectionStatusEl: document.getElementById("cloudConnectionStatus"),
     emailTemplatesListEl: document.getElementById("emailTemplatesList"),
     addEmailTemplateBtn: document.getElementById("addEmailTemplateBtn"),
     emailTemplateEmptyEl: document.getElementById("emailTemplateEmpty"),
@@ -139,6 +143,14 @@
   const NOTE_TEMPLATES_LOCAL_KEY = "popupNoteTemplates";
   const TEMPLATE_USAGE_LOCAL_KEY = "popupTemplateUsageByContact";
   const QUICK_NOTES_LOCAL_KEY = "popupQuickNotesByRecordId";
+  const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
+  const CLOUD_EMAIL_CACHE_PREFIX = "popupCloudEmailTemplates::";
+  const CLOUD_WHATSAPP_CACHE_PREFIX = "popupCloudWhatsappTemplates::";
+  const CLOUD_NOTE_CACHE_PREFIX = "popupCloudNoteTemplates::";
+  const CLOUD_META_CACHE_PREFIX = "popupCloudTemplatesMeta::";
+  const CLOUD_TEMPLATE_ID_PREFIX = "cloud_";
+  const CLOUD_API_BASE_URL = "https://contact-point-cloud-platform.vercel.app";
+  const CLOUD_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const SELECTED_KEYS_SESSION_KEY = "popupSelectedContactKeys";
   const LEGACY_NOTE_TEXT = "Reached out on WhatsApp";
   const DEFAULT_EMAIL_TEMPLATE = {
@@ -208,7 +220,15 @@
     },
     contactsSearchQuery: "",
     templateUsageByContact: {},
-    quickNotesByRecordId: {}
+    quickNotesByRecordId: {},
+    cloud: {
+      auth: null,
+      emailTemplates: [],
+      whatsappTemplates: [],
+      noteTemplates: [],
+      meta: null,
+      status: ""
+    }
   };
   let templateUsageSaveTimerId = null;
   let quickNotesSaveTimerId = null;
@@ -327,6 +347,92 @@
       templates.push({ ...DEFAULT_NOTE_TEMPLATE });
     }
     return templates;
+  }
+
+  function isCloudTemplateId(templateIdInput) {
+    return String(templateIdInput || "").startsWith(CLOUD_TEMPLATE_ID_PREFIX);
+  }
+
+  function stripCloudTemplatePrefix(templateIdInput) {
+    return String(templateIdInput || "").replace(new RegExp(`^${CLOUD_TEMPLATE_ID_PREFIX}`), "");
+  }
+
+  function normalizeCloudAuth(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const apiToken = String(raw.apiToken || "").trim();
+    const organizationId = String(raw.organizationId || "").trim();
+    if (!apiToken || !organizationId) return null;
+    return {
+      apiToken,
+      organizationId,
+      organizationName: String(raw.organizationName || "").trim(),
+      organizationSlug: String(raw.organizationSlug || "").trim(),
+      tokenPrefix: String(raw.tokenPrefix || "").trim(),
+      updatedAt: String(raw.updatedAt || "").trim() || new Date().toISOString()
+    };
+  }
+
+  function normalizeCloudTemplateArray(rawTemplates, expectedType) {
+    const templates = [];
+    const seen = new Set();
+    const source = Array.isArray(rawTemplates) ? rawTemplates : [];
+
+    for (const item of source) {
+      const baseId = String(item?.id || "").trim();
+      if (!baseId) continue;
+      const id = `${CLOUD_TEMPLATE_ID_PREFIX}${baseId}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      const type = String(item?.type || expectedType || "").toUpperCase();
+      if (!type) continue;
+
+      templates.push({
+        id,
+        cloudId: baseId,
+        organizationId: String(item?.organizationId || state.cloud?.auth?.organizationId || "").trim(),
+        type,
+        source: "cloud",
+        readOnly: true,
+        name: String(item?.name || "").trim() || "Untitled",
+        subject: String(item?.subject || "").trim(),
+        body: String(item?.body || "").trim(),
+        createdAt: String(item?.createdAt || "").trim() || null,
+        updatedAt: String(item?.updatedAt || "").trim() || null
+      });
+    }
+
+    return templates;
+  }
+
+  function getMergedEmailTemplates() {
+    const localTemplates = normalizeEmailTemplates(state.settings.emailTemplates).map((template) => ({
+      ...template,
+      source: "local",
+      readOnly: false,
+      type: "EMAIL"
+    }));
+    return [...localTemplates, ...state.cloud.emailTemplates];
+  }
+
+  function getMergedWhatsappTemplates() {
+    const localTemplates = normalizeWhatsappTemplates(state.settings.whatsappTemplates).map((template) => ({
+      ...template,
+      source: "local",
+      readOnly: false,
+      type: "WHATSAPP"
+    }));
+    return [...localTemplates, ...state.cloud.whatsappTemplates];
+  }
+
+  function getMergedNoteTemplates() {
+    const localTemplates = normalizeNoteTemplates(state.settings.noteTemplates).map((template) => ({
+      ...template,
+      source: "local",
+      readOnly: false,
+      type: "NOTE"
+    }));
+    return [...localTemplates, ...state.cloud.noteTemplates];
   }
 
   function templateTokenKey(input) {
@@ -757,6 +863,14 @@
     NOTE_TEMPLATES_LOCAL_KEY,
     TEMPLATE_USAGE_LOCAL_KEY,
     QUICK_NOTES_LOCAL_KEY,
+    CLOUD_AUTH_LOCAL_KEY,
+    CLOUD_EMAIL_CACHE_PREFIX,
+    CLOUD_WHATSAPP_CACHE_PREFIX,
+    CLOUD_NOTE_CACHE_PREFIX,
+    CLOUD_META_CACHE_PREFIX,
+    CLOUD_TEMPLATE_ID_PREFIX,
+    CLOUD_API_BASE_URL,
+    CLOUD_CACHE_TTL_MS,
     SELECTED_KEYS_SESSION_KEY,
     LEGACY_NOTE_TEXT,
     DEFAULT_EMAIL_TEMPLATE,
@@ -778,6 +892,13 @@
     normalizeEmailTemplates,
     normalizeWhatsappTemplates,
     normalizeNoteTemplates,
+    normalizeCloudAuth,
+    normalizeCloudTemplateArray,
+    isCloudTemplateId,
+    stripCloudTemplatePrefix,
+    getMergedEmailTemplates,
+    getMergedWhatsappTemplates,
+    getMergedNoteTemplates,
     templateTokenKey,
     applyTokens,
     normalizeThemeMode,

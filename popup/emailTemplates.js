@@ -453,23 +453,74 @@
     setEmailTemplateSaveState("saved", "Saved");
   }
 
+  function getMergedEmailTemplates() {
+    if (typeof App.getMergedEmailTemplates === "function") {
+      return App.getMergedEmailTemplates();
+    }
+    return App.normalizeEmailTemplates(state.settings.emailTemplates).map((template) => ({
+      ...template,
+      source: "local",
+      readOnly: false,
+      type: "EMAIL"
+    }));
+  }
+
   function getActiveEmailTemplateDraft() {
     return state.emailTemplatesDraft.find((template) => template.id === state.activeEmailTemplateId) || null;
   }
 
+  function getActiveEmailTemplateAny() {
+    const templates = getMergedEmailTemplates();
+    return templates.find((template) => template.id === state.activeEmailTemplateId) || null;
+  }
+
+  function isCloudTemplate(template) {
+    if (!template) return false;
+    if (template.readOnly === true || template.source === "cloud") return true;
+    if (typeof App.isCloudTemplateId === "function") {
+      return App.isCloudTemplateId(template.id);
+    }
+    return false;
+  }
+
+  function setEmailEditorReadOnly(readOnly) {
+    const nextReadOnly = !!readOnly;
+    if (dom.emailTemplateNameInput) dom.emailTemplateNameInput.disabled = nextReadOnly;
+    if (dom.emailTemplateSubjectInput) dom.emailTemplateSubjectInput.disabled = nextReadOnly;
+    if (dom.deleteEmailTemplateBtn) dom.deleteEmailTemplateBtn.hidden = nextReadOnly;
+
+    const editor = getTinyEmailBodyEditor();
+    if (editor?.mode?.set) {
+      editor.mode.set(nextReadOnly ? "readonly" : "design");
+    } else if (dom.emailTemplateBodyInput) {
+      dom.emailTemplateBodyInput.readOnly = nextReadOnly;
+      dom.emailTemplateBodyInput.disabled = nextReadOnly;
+    }
+  }
+
   function renderEmailTemplatesList() {
+    const templates = getMergedEmailTemplates();
     if (!dom.emailTemplatesListEl) return;
-    if (!state.emailTemplatesDraft.length) {
+    if (!templates.length) {
       dom.emailTemplatesListEl.innerHTML = "<div class='email-template-empty'>No templates yet.</div>";
       return;
     }
 
-    dom.emailTemplatesListEl.innerHTML = state.emailTemplatesDraft
+    if (!templates.some((template) => template.id === state.activeEmailTemplateId)) {
+      state.activeEmailTemplateId = templates[0]?.id || "";
+    }
+
+    dom.emailTemplatesListEl.innerHTML = templates
       .map((template) => {
         const activeClass = template.id === state.activeEmailTemplateId ? "active" : "";
+        const sourceClass = template.source === "cloud" ? "cloud" : "local";
+        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
         return `
         <button type='button' class='email-template-list-btn ${activeClass}' data-template-id='${App.escapeHtml(template.id)}'>
-          <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+          <span class='email-template-list-head'>
+            <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+            <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+          </span>
         </button>
       `;
       })
@@ -477,18 +528,24 @@
   }
 
   function renderActiveEmailTemplateEditor() {
-    const active = getActiveEmailTemplateDraft();
+    const active = getActiveEmailTemplateAny();
     const hasActive = !!active;
+    const activeIsCloud = isCloudTemplate(active);
 
     if (dom.emailTemplateEmptyEl) dom.emailTemplateEmptyEl.hidden = hasActive;
     if (dom.emailTemplateEditorEl) dom.emailTemplateEditorEl.hidden = !hasActive;
-    if (!hasActive) return;
+    if (!hasActive) {
+      setEmailEditorReadOnly(false);
+      return;
+    }
 
     beginTemplateFormSync();
     if (dom.emailTemplateNameInput) dom.emailTemplateNameInput.value = active.name || "";
     if (dom.emailTemplateSubjectInput) dom.emailTemplateSubjectInput.value = active.subject || "";
     writeEmailBodyValueToForm(active.body || "");
     endTemplateFormSyncDeferred();
+    setEmailEditorReadOnly(activeIsCloud);
+    setEmailTemplateSaveState("saved", activeIsCloud ? "Cloud read-only" : "Saved");
   }
 
   function renderEmailTemplatesPage() {
@@ -498,6 +555,7 @@
 
   function upsertActiveTemplateFromForm() {
     if (state.syncingEmailTemplateForm) return;
+    if (typeof App.isCloudTemplateId === "function" && App.isCloudTemplateId(state.activeEmailTemplateId)) return;
     const active = getActiveEmailTemplateDraft();
     if (!active) return;
 
@@ -523,6 +581,7 @@
   }
 
   function deleteActiveEmailTemplateDraft() {
+    if (typeof App.isCloudTemplateId === "function" && App.isCloudTemplateId(state.activeEmailTemplateId)) return;
     if (!state.activeEmailTemplateId) return;
     state.emailTemplatesDraft = state.emailTemplatesDraft.filter((template) => template.id !== state.activeEmailTemplateId);
     if (!state.emailTemplatesDraft.length) {
@@ -535,7 +594,7 @@
 
   function renderEmailTemplatePickerOptions() {
     if (!dom.emailTemplatePickList) return;
-    const templates = App.normalizeEmailTemplates(state.settings.emailTemplates);
+    const templates = getMergedEmailTemplates();
     const query = String(state.emailTemplatePickState?.query || "")
       .trim()
       .toLowerCase();
@@ -547,7 +606,7 @@
         })
       : templates;
     if (!templates.length) {
-      dom.emailTemplatePickList.innerHTML = "<div class='email-template-empty'>No templates found. Add one via the email icon.</div>";
+      dom.emailTemplatePickList.innerHTML = "<div class='email-template-empty'>No templates found.</div>";
       return;
     }
     if (!matchingTemplates.length) {
@@ -559,13 +618,16 @@
       .map((template) => {
         const preview = templatePreviewText(template);
         const isAppliedForContact = App.hasTemplateApplied("email", state.emailTemplatePickState.key, template.id);
+        const sourceClass = template.source === "cloud" ? "cloud" : "local";
+        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
         return `
         <button type='button' class='email-template-pick-item' data-template-id='${App.escapeHtml(template.id)}'>
           <span class='email-template-pick-head'>
-            <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
-            <span class='email-template-pick-used ${isAppliedForContact ? "is-used" : ""}' aria-hidden='true'>${
-              isAppliedForContact ? "✓" : ""
-            }</span>
+            <span class='email-template-pick-title-wrap'>
+              <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
+              <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+            </span>
+            <span class='email-template-pick-used ${isAppliedForContact ? "is-used" : ""}' aria-hidden='true'>${isAppliedForContact ? "✓" : ""}</span>
           </span>
           <span class='email-template-pick-preview'>${App.escapeHtml(preview.slice(0, 90) || "No subject/body yet")}</span>
         </button>
