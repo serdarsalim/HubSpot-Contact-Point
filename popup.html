@@ -955,6 +955,13 @@
         color: var(--text);
       }
 
+      ul.record-id-required-message {
+        margin: 0 0 8px 18px;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+      }
+
       .settings-head {
         display: flex;
         justify-content: space-between;
@@ -1045,21 +1052,74 @@
         font-size: 14px;
       }
 
+      .cloud-token-label-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
+      .cloud-token-label-row label {
+        margin-bottom: 0;
+      }
+
+      .cloud-token-info-btn {
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #eef4fb;
+        color: #375371;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .cloud-token-info-btn:hover {
+        border-color: #8fb0d4;
+        color: #173656;
+      }
+
+      .cloud-auth-cards {
+        display: grid;
+        gap: 8px;
+      }
+
+      .cloud-auth-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px;
+      }
+
+      .cloud-auth-card.pending {
+        background: var(--panel);
+      }
+
+      .cloud-auth-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
       .cloud-token-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
         align-items: center;
         gap: 8px;
       }
 
-      .cloud-token-input-col {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
       .cloud-token-row .btn {
         white-space: nowrap;
+      }
+
+      .cloud-auth-actions {
+        display: flex;
+        justify-content: flex-start;
+        margin-top: 8px;
       }
 
       .cloud-refresh-btn {
@@ -1135,6 +1195,7 @@
       }
 
       #cloudConnectionStatus {
+        grid-column: 1 / 2;
         margin: 0;
         text-align: right;
       }
@@ -1209,6 +1270,11 @@
 
         .cloud-token-row {
           grid-template-columns: 1fr;
+        }
+
+        .cloud-token-label-row {
+          width: 100%;
+          justify-content: space-between;
         }
       }
 
@@ -1782,6 +1848,17 @@
         color: #9ac1f8;
       }
 
+      body[data-theme="dark"] .cloud-token-info-btn {
+        background: #1d2f45;
+        border-color: #405877;
+        color: #c5daef;
+      }
+
+      body[data-theme="dark"] .cloud-token-info-btn:hover {
+        border-color: #6c93be;
+        color: #e6f1ff;
+      }
+
       body[data-theme="dark"] .template-source-pill.local {
         background: #1f3a31;
         color: #9de5bd;
@@ -2091,15 +2168,23 @@
           <input id="rowFilterInput" type="text" placeholder="preview, blacklist" />
         </div>
         <div class="field">
-          <label for="cloudApiTokenInput">Cloud API token</label>
-          <div class="cloud-token-row">
-            <div class="cloud-token-input-col">
-              <input id="cloudApiTokenInput" type="password" placeholder="Paste API token" autocomplete="off" />
-              <p id="cloudConnectionStatus" class="template-import-summary">Disconnected</p>
-            </div>
-            <button id="saveCloudTokenBtn" class="btn" type="button">Save</button>
-            <button id="refreshCloudTemplatesBtn" class="btn cloud-refresh-btn" type="button" aria-label="Refresh templates" title="Refresh templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
+          <div class="cloud-token-label-row">
+            <label>Team template access keys</label>
+            <button
+              id="cloudTokenInfoBtn"
+              class="cloud-token-info-btn"
+              type="button"
+              aria-label="Shared team templates"
+              title="Shared team templates"
+            >
+              i
+            </button>
           </div>
+          <div id="cloudAuthCards" class="cloud-auth-cards"></div>
+          <div class="cloud-auth-actions">
+            <button id="addCloudAuthBtn" class="btn" type="button">+ Add org key</button>
+          </div>
+          <p id="cloudConnectionStatus" class="template-import-summary">Not connected</p>
         </div>
 
         <div class="field">
@@ -2216,6 +2301,27 @@
         <div class="settings-actions">
           <button id="cancelTemplateImportBtn" class="btn" type="button">Cancel</button>
           <button id="applyTemplateImportBtn" class="btn primary" type="button">Import Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cloudTokenInfoOverlay" class="record-id-required-overlay">
+      <div class="record-id-required-card">
+        <div class="settings-head">
+          <h2>Shared team templates</h2>
+        </div>
+        <ul class="record-id-required-message">
+          <li>Shared team templates let members in the same organization use the same templates in this extension.</li>
+          <li>Shared templates are read-only here.</li>
+          <li>Organization admins manage shared templates in the workspace web app.</li>
+          <li>Your personal local templates are still available and unchanged.</li>
+          <li>
+            Shared team templates are a premium feature. For access, contact Serdar Salim at
+            <a href="https://serdarsalim.com" target="_blank" rel="noreferrer">serdarsalim.com</a>.
+          </li>
+        </ul>
+        <div class="settings-actions">
+          <button id="cloudTokenInfoCloseBtn" class="btn primary" type="button">Got it</button>
         </div>
       </div>
     </div>

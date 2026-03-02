@@ -2,6 +2,9 @@
   const App = window.PopupApp;
   const { dom, state, constants } = App;
   let pendingImportTemplates = [];
+  let cloudPendingRowSeq = 0;
+  let cloudPendingRows = [];
+  const cloudPendingTokenDrafts = {};
 
   function buildSyncSettingsPayload(settingsInput = state.settings) {
     const source = settingsInput && typeof settingsInput === "object" ? settingsInput : {};
@@ -17,6 +20,56 @@
   async function persistSyncSettings(settingsInput = state.settings) {
     const syncSafeSettings = buildSyncSettingsPayload(settingsInput);
     await chrome.storage.sync.set({ [constants.SETTINGS_KEY]: syncSafeSettings });
+  }
+
+  function normalizeCloudAuthList(rawList) {
+    const source = Array.isArray(rawList) ? rawList : [];
+    const byOrgId = new Map();
+    for (const item of source) {
+      const normalized = App.normalizeCloudAuth(item);
+      if (!normalized) continue;
+      byOrgId.set(normalized.organizationId, normalized);
+    }
+    return Array.from(byOrgId.values());
+  }
+
+  function findCloudAuthByOrgId(organizationIdInput) {
+    const organizationId = String(organizationIdInput || "").trim();
+    if (!organizationId) return null;
+    return state.cloud.authList.find((item) => item.organizationId === organizationId) || null;
+  }
+
+  function getCloudConnectionCount() {
+    return Array.isArray(state.cloud.authList) ? state.cloud.authList.length : 0;
+  }
+
+  function canAddMoreCloudRows() {
+    return getCloudConnectionCount() + cloudPendingRows.length < constants.MAX_CLOUD_ORG_CONNECTIONS;
+  }
+
+  function createCloudPendingRow() {
+    cloudPendingRowSeq += 1;
+    return `pending_cloud_row_${Date.now()}_${cloudPendingRowSeq}`;
+  }
+
+  function ensureDefaultPendingCloudRow() {
+    if (getCloudConnectionCount() === 0 && cloudPendingRows.length === 0) {
+      cloudPendingRows.push(createCloudPendingRow());
+    }
+  }
+
+  async function persistCloudAuthState() {
+    const normalizedList = normalizeCloudAuthList(state.cloud.authList);
+    state.cloud.authList = normalizedList;
+    const primaryAuth = normalizedList[0] || null;
+    state.cloud.activeOrganizationId = "";
+    state.cloud.auth = primaryAuth;
+
+    await chrome.storage.local.set({
+      [constants.CLOUD_AUTH_LIST_LOCAL_KEY]: normalizedList,
+      [constants.CLOUD_ACTIVE_ORG_ID_LOCAL_KEY]: "",
+      [constants.CLOUD_AUTH_LOCAL_KEY]: primaryAuth
+    });
   }
 
   function getCloudCacheKeys(organizationIdInput) {
@@ -65,15 +118,83 @@
       return;
     }
 
-    const auth = state.cloud.auth;
-    if (!auth?.apiToken || !auth.organizationId) {
-      dom.cloudConnectionStatusEl.textContent = "Disconnected";
+    const authList = Array.isArray(state.cloud.authList) ? state.cloud.authList : [];
+    if (!authList.length) {
+      dom.cloudConnectionStatusEl.textContent = "Not connected";
       return;
     }
 
-    const orgName = auth.organizationName || auth.organizationSlug || auth.organizationId;
     const syncedAt = formatCloudSyncLabel(state.cloud.meta);
-    dom.cloudConnectionStatusEl.textContent = "Connected to " + orgName + " (last sync: " + syncedAt + ")";
+    const total = authList.length;
+    dom.cloudConnectionStatusEl.textContent = total + " org key" + (total === 1 ? "" : "s") + " connected (last sync: " + syncedAt + ").";
+  }
+
+  function renderCloudAuthCards() {
+    if (!dom.cloudAuthCardsEl) return;
+
+    ensureDefaultPendingCloudRow();
+    const authCards = (state.cloud.authList || []).map((auth) => {
+      const orgName = auth.organizationName || auth.organizationSlug || auth.organizationId;
+      return `
+        <div class="cloud-auth-card" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">
+          <div class="cloud-auth-card-head">
+            <strong>${App.escapeHtml(orgName)}</strong>
+          </div>
+          <div class="cloud-token-row">
+            <input
+              type="password"
+              data-cloud-token-input="true"
+              data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
+              value="${App.escapeHtml(auth.apiToken)}"
+              placeholder="Paste team access key"
+              autocomplete="off"
+            />
+            <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">Update</button>
+            <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Refresh templates" title="Refresh templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
+            <button class="btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">Remove</button>
+          </div>
+        </div>
+      `;
+    });
+
+    const pendingCards = cloudPendingRows.map((rowId) => `
+      <div class="cloud-auth-card pending" data-cloud-pending-row-id="${App.escapeHtml(rowId)}">
+        <div class="cloud-auth-card-head">
+          <strong>New org key</strong>
+        </div>
+        <div class="cloud-token-row">
+          <input
+            type="password"
+            data-cloud-token-input="true"
+            data-cloud-pending-row-id="${App.escapeHtml(rowId)}"
+            value="${App.escapeHtml(cloudPendingTokenDrafts[rowId] || "")}"
+            placeholder="Paste team access key"
+            autocomplete="off"
+          />
+          <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-pending-row-id="${App.escapeHtml(rowId)}">Connect</button>
+          <button class="btn" type="button" data-cloud-remove-pending-btn="true" data-cloud-pending-row-id="${App.escapeHtml(rowId)}">Remove</button>
+        </div>
+      </div>
+    `);
+
+    dom.cloudAuthCardsEl.innerHTML = [...authCards, ...pendingCards].join("");
+    if (dom.addCloudAuthBtn) {
+      dom.addCloudAuthBtn.disabled = !canAddMoreCloudRows();
+      dom.addCloudAuthBtn.textContent = canAddMoreCloudRows() ? "Add more" : "Max 5 org keys";
+    }
+  }
+
+  function openCloudTokenInfoDialog() {
+    if (!dom.cloudTokenInfoOverlay) return;
+    dom.cloudTokenInfoOverlay.classList.add("open");
+  }
+
+  function closeCloudTokenInfoDialog() {
+    if (!dom.cloudTokenInfoOverlay) return;
+    App.blurFocusedElementWithin(dom.cloudTokenInfoOverlay);
+    requestAnimationFrame(() => {
+      dom.cloudTokenInfoOverlay.classList.remove("open");
+    });
   }
 
   function rerenderTemplateViewsForCloudChange() {
@@ -139,42 +260,77 @@
     return message.includes("invalid or revoked api token") || message.includes("revoked");
   }
 
-  async function loadCloudCacheFromStorage(authInput = state.cloud.auth) {
-    const auth = App.normalizeCloudAuth(authInput);
-    if (!auth) {
-      state.cloud.auth = null;
+  async function loadCloudCacheFromStorage() {
+    const authList = normalizeCloudAuthList(state.cloud.authList);
+    state.cloud.authList = authList;
+    state.cloud.auth = authList[0] || null;
+    state.cloud.activeOrganizationId = "";
+
+    if (!authList.length) {
       state.cloud.emailTemplates = [];
       state.cloud.whatsappTemplates = [];
       state.cloud.noteTemplates = [];
       state.cloud.meta = null;
       renderCloudConnectionStatus();
+      renderCloudAuthCards();
       return;
     }
 
-    const cacheKeys = getCloudCacheKeys(auth.organizationId);
-    if (!cacheKeys) {
-      state.cloud.auth = auth;
-      state.cloud.emailTemplates = [];
-      state.cloud.whatsappTemplates = [];
-      state.cloud.noteTemplates = [];
-      state.cloud.meta = null;
-      renderCloudConnectionStatus();
-      return;
+    const keySet = new Set();
+    for (const auth of authList) {
+      const cacheKeys = getCloudCacheKeys(auth.organizationId);
+      if (!cacheKeys) continue;
+      keySet.add(cacheKeys.emailKey);
+      keySet.add(cacheKeys.whatsappKey);
+      keySet.add(cacheKeys.noteKey);
+      keySet.add(cacheKeys.metaKey);
     }
 
-    const cache = await chrome.storage.local.get([
-      cacheKeys.emailKey,
-      cacheKeys.whatsappKey,
-      cacheKeys.noteKey,
-      cacheKeys.metaKey
-    ]);
+    const cache = await chrome.storage.local.get(Array.from(keySet));
+    const mergedEmail = [];
+    const mergedWhatsapp = [];
+    const mergedNote = [];
+    const metaByOrg = {};
+    let latestSyncAt = "";
 
-    state.cloud.auth = auth;
-    state.cloud.emailTemplates = App.normalizeCloudTemplateArray(cache[cacheKeys.emailKey], "EMAIL");
-    state.cloud.whatsappTemplates = App.normalizeCloudTemplateArray(cache[cacheKeys.whatsappKey], "WHATSAPP");
-    state.cloud.noteTemplates = App.normalizeCloudTemplateArray(cache[cacheKeys.noteKey], "NOTE");
-    state.cloud.meta = cache[cacheKeys.metaKey] && typeof cache[cacheKeys.metaKey] === "object" ? cache[cacheKeys.metaKey] : null;
+    for (const auth of authList) {
+      const cacheKeys = getCloudCacheKeys(auth.organizationId);
+      if (!cacheKeys) continue;
+      const orgLabel = auth.organizationName || auth.organizationSlug || auth.organizationId;
+      const emailTemplates = App.normalizeCloudTemplateArray(cache[cacheKeys.emailKey], "EMAIL", auth.organizationId).map((item) => ({
+        ...item,
+        organizationName: orgLabel
+      }));
+      const whatsappTemplates = App.normalizeCloudTemplateArray(cache[cacheKeys.whatsappKey], "WHATSAPP", auth.organizationId).map((item) => ({
+        ...item,
+        organizationName: orgLabel
+      }));
+      const noteTemplates = App.normalizeCloudTemplateArray(cache[cacheKeys.noteKey], "NOTE", auth.organizationId).map((item) => ({
+        ...item,
+        organizationName: orgLabel
+      }));
+      const meta = cache[cacheKeys.metaKey] && typeof cache[cacheKeys.metaKey] === "object" ? cache[cacheKeys.metaKey] : null;
+      mergedEmail.push(...emailTemplates);
+      mergedWhatsapp.push(...whatsappTemplates);
+      mergedNote.push(...noteTemplates);
+      if (meta) {
+        metaByOrg[auth.organizationId] = meta;
+        const syncAt = String(meta?.lastFullSyncAt || "");
+        if (syncAt && (!latestSyncAt || Date.parse(syncAt) > Date.parse(latestSyncAt))) {
+          latestSyncAt = syncAt;
+        }
+      }
+    }
+
+    state.cloud.emailTemplates = mergedEmail;
+    state.cloud.whatsappTemplates = mergedWhatsapp;
+    state.cloud.noteTemplates = mergedNote;
+    state.cloud.meta = {
+      byOrg: metaByOrg,
+      lastFullSyncAt: latestSyncAt || null
+    };
     renderCloudConnectionStatus();
+    renderCloudAuthCards();
   }
 
   function isEmailTemplatesOpen() {
@@ -280,12 +436,7 @@
     if (dom.messageTemplateInput) dom.messageTemplateInput.value = "";
     if (dom.noteTemplateInput) dom.noteTemplateInput.value = "";
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
-    if (dom.cloudApiTokenInput) {
-      dom.cloudApiTokenInput.value = String(state.cloud?.auth?.apiToken || "");
-    }
-    if (dom.cloudApiBaseUrlInput) {
-      dom.cloudApiBaseUrlInput.value = String(state.cloud?.auth?.apiBaseUrl || constants.CLOUD_API_BASE_URL);
-    }
+    renderCloudAuthCards();
     renderCloudConnectionStatus();
     renderColumnChecks();
   }
@@ -505,35 +656,31 @@
 
   async function clearCloudConnection(options = {}) {
     const showToast = options?.showToast !== false;
-    const statusMessage = String(options?.statusMessage || "Cloud API token removed.");
-    const previousOrgId = String(state.cloud?.auth?.organizationId || "").trim();
+    const statusMessage = String(options?.statusMessage || "Team access key removed.");
+    const targetOrgId = String(options?.organizationId || "").trim();
 
-    state.cloud.auth = null;
-    state.cloud.emailTemplates = [];
-    state.cloud.whatsappTemplates = [];
-    state.cloud.noteTemplates = [];
-    state.cloud.meta = null;
-    state.cloud.status = statusMessage;
-
-    const keysToRemove = [constants.CLOUD_AUTH_LOCAL_KEY];
-
-    if (previousOrgId) {
-      const previousCacheKeys = getCloudCacheKeys(previousOrgId);
-      if (previousCacheKeys) {
-        keysToRemove.push(previousCacheKeys.emailKey, previousCacheKeys.whatsappKey, previousCacheKeys.noteKey, previousCacheKeys.metaKey);
+    if (targetOrgId) {
+      state.cloud.authList = (state.cloud.authList || []).filter((item) => item.organizationId !== targetOrgId);
+      const cacheKeys = getCloudCacheKeys(targetOrgId);
+      if (cacheKeys) {
+        await chrome.storage.local.remove([cacheKeys.emailKey, cacheKeys.whatsappKey, cacheKeys.noteKey, cacheKeys.metaKey]);
       }
+    } else {
+      state.cloud.authList = [];
     }
 
-    await chrome.storage.local.remove(keysToRemove);
-
-    if (dom.cloudApiTokenInput) {
-      dom.cloudApiTokenInput.value = "";
+    state.cloud.status = statusMessage;
+    await persistCloudAuthState();
+    if (!state.cloud.auth) {
+      state.cloud.emailTemplates = [];
+      state.cloud.whatsappTemplates = [];
+      state.cloud.noteTemplates = [];
+      state.cloud.meta = null;
+    } else {
+      await loadCloudCacheFromStorage(state.cloud.auth);
     }
-    if (dom.cloudApiBaseUrlInput) {
-      dom.cloudApiBaseUrlInput.value = String(constants.CLOUD_API_BASE_URL);
-    }
 
-    renderCloudConnectionStatus();
+    ensureDefaultPendingCloudRow();
     rerenderTemplateViewsForCloudChange();
     App.setStatus(statusMessage);
     if (showToast && typeof App.showToast === "function") {
@@ -563,144 +710,179 @@
     const force = options?.force === true;
     const showToast = options?.showToast === true;
     const silent = options?.silent === true;
+    const targetOrgId = String(options?.organizationId || "").trim();
+    const authList = normalizeCloudAuthList(state.cloud.authList);
+    state.cloud.authList = authList;
 
-    const auth = App.normalizeCloudAuth(state.cloud.auth);
-    if (!auth) {
+    if (!authList.length) {
       renderCloudConnectionStatus();
       if (!silent) {
-        App.setStatus("Add a cloud API token in Settings.");
+        App.setStatus("Add your team access key in Settings.");
       }
       return { ok: false, error: "missing_api_token" };
     }
 
-    try {
-      const me = await fetchCloudJson("/api/v1/extension/me", auth.apiToken, auth.apiBaseUrl);
-      const nextAuth = App.normalizeCloudAuth({
-        ...auth,
-        organizationId: me?.organization?.id,
-        organizationName: me?.organization?.name,
-        organizationSlug: me?.organization?.slug,
-        tokenPrefix: me?.token?.prefix,
-        updatedAt: new Date().toISOString()
-      });
-
-      if (!nextAuth) {
-        throw new Error("Cloud token is missing organization scope.");
-      }
-
-      const previousOrgId = String(state.cloud.auth?.organizationId || "");
-      const orgChanged = previousOrgId && previousOrgId !== nextAuth.organizationId;
-      state.cloud.auth = nextAuth;
-
-      if (orgChanged || !state.cloud.meta) {
-        await loadCloudCacheFromStorage(nextAuth);
-      }
-
-      const remoteMeta = await fetchCloudJson("/api/v1/extension/templates/meta", nextAuth.apiToken, nextAuth.apiBaseUrl);
-      const nowIso = new Date().toISOString();
-      const localMeta = state.cloud.meta && typeof state.cloud.meta === "object" ? state.cloud.meta : null;
-      const hasCachedTemplates =
-        state.cloud.emailTemplates.length + state.cloud.whatsappTemplates.length + state.cloud.noteTemplates.length > 0;
-      const needsFullSync = shouldPerformFullCloudSync(localMeta, remoteMeta, hasCachedTemplates, force);
-      const cacheKeys = getCloudCacheKeys(nextAuth.organizationId);
-
-      const nextMetaBase = {
-        organizationId: nextAuth.organizationId,
-        latestUpdatedAt: remoteMeta?.latestUpdatedAt || null,
-        templateCount: Number(remoteMeta?.templateCount || 0),
-        lastCheckedAt: nowIso
-      };
-
-      if (needsFullSync) {
-        const templatesPayload = await fetchCloudJson(
-          "/api/v1/extension/templates",
-          nextAuth.apiToken,
-          nextAuth.apiBaseUrl
-        );
-        const split = splitCloudTemplatesByType(templatesPayload?.templates);
-        const emailTemplates = App.normalizeCloudTemplateArray(split.email, "EMAIL");
-        const whatsappTemplates = App.normalizeCloudTemplateArray(split.whatsapp, "WHATSAPP");
-        const noteTemplates = App.normalizeCloudTemplateArray(split.note, "NOTE");
-
-        state.cloud.emailTemplates = emailTemplates;
-        state.cloud.whatsappTemplates = whatsappTemplates;
-        state.cloud.noteTemplates = noteTemplates;
-        state.cloud.meta = {
-          ...nextMetaBase,
-          lastFullSyncAt: nowIso
-        };
-
-        if (cacheKeys) {
-          await chrome.storage.local.set({
-            [constants.CLOUD_AUTH_LOCAL_KEY]: nextAuth,
-            [cacheKeys.emailKey]: emailTemplates,
-            [cacheKeys.whatsappKey]: whatsappTemplates,
-            [cacheKeys.noteKey]: noteTemplates,
-            [cacheKeys.metaKey]: state.cloud.meta
-          });
-        }
-      } else {
-        state.cloud.meta = {
-          ...nextMetaBase,
-          lastFullSyncAt: String(localMeta?.lastFullSyncAt || nowIso)
-        };
-
-        if (cacheKeys) {
-          await chrome.storage.local.set({
-            [constants.CLOUD_AUTH_LOCAL_KEY]: nextAuth,
-            [cacheKeys.metaKey]: state.cloud.meta
-          });
-        }
-      }
-
-      renderCloudConnectionStatus();
-      rerenderTemplateViewsForCloudChange();
-
-      const orgName = nextAuth.organizationName || nextAuth.organizationSlug || nextAuth.organizationId;
-      const message = needsFullSync
-        ? `Cloud templates synced for ${orgName}.`
-        : `Cloud templates checked for ${orgName}. No changes.`;
-      if (!silent) {
-        App.setStatus(message);
-      }
-      if (showToast && typeof App.showToast === "function") {
-        App.showToast(message);
-      }
-
-      return { ok: true, fullSync: needsFullSync };
-    } catch (error) {
-      const reason = String(error?.message || "Cloud sync failed.");
-      if (shouldDisconnectCloudAuth(error)) {
-        await clearCloudConnection({
-          showToast,
-          statusMessage: "Cloud token is invalid or revoked. Cloud templates disconnected."
-        });
-        return { ok: false, error: reason };
-      }
-
-      renderCloudConnectionStatus("Connection issue: " + reason);
-      if (!silent) {
-        App.setStatus("Cloud sync failed: " + reason);
-      }
-      if (showToast && typeof App.showToast === "function") {
-        App.showToast("Cloud sync failed: " + reason, 3200);
-      }
-      return { ok: false, error: reason };
+    const targets = targetOrgId
+      ? authList.filter((item) => item.organizationId === targetOrgId)
+      : authList.slice();
+    if (!targets.length) {
+      return { ok: false, error: "missing_org_connection" };
     }
+
+    const results = [];
+    for (const auth of targets) {
+      try {
+        const me = await fetchCloudJson("/api/v1/extension/me", auth.apiToken, auth.apiBaseUrl);
+        const nextAuth = App.normalizeCloudAuth({
+          ...auth,
+          organizationId: me?.organization?.id,
+          organizationName: me?.organization?.name,
+          organizationSlug: me?.organization?.slug,
+          tokenPrefix: me?.token?.prefix,
+          updatedAt: new Date().toISOString()
+        });
+        if (!nextAuth) {
+          throw new Error("Cloud token is missing organization scope.");
+        }
+
+        if (nextAuth.organizationId !== auth.organizationId) {
+          const oldCacheKeys = getCloudCacheKeys(auth.organizationId);
+          if (oldCacheKeys) {
+            await chrome.storage.local.remove([oldCacheKeys.emailKey, oldCacheKeys.whatsappKey, oldCacheKeys.noteKey, oldCacheKeys.metaKey]);
+          }
+        }
+
+        state.cloud.authList = normalizeCloudAuthList([
+          ...(state.cloud.authList || []).filter((item) => item.organizationId !== auth.organizationId && item.organizationId !== nextAuth.organizationId),
+          nextAuth
+        ]);
+
+        const cacheKeys = getCloudCacheKeys(nextAuth.organizationId);
+        const localMetaResult = cacheKeys ? await chrome.storage.local.get([cacheKeys.metaKey]) : {};
+        const localMeta = cacheKeys && localMetaResult[cacheKeys.metaKey] && typeof localMetaResult[cacheKeys.metaKey] === "object"
+          ? localMetaResult[cacheKeys.metaKey]
+          : null;
+        const hasCachedTemplates = state.cloud.emailTemplates.some((item) => item.organizationId === nextAuth.organizationId)
+          || state.cloud.whatsappTemplates.some((item) => item.organizationId === nextAuth.organizationId)
+          || state.cloud.noteTemplates.some((item) => item.organizationId === nextAuth.organizationId);
+
+        const remoteMeta = await fetchCloudJson("/api/v1/extension/templates/meta", nextAuth.apiToken, nextAuth.apiBaseUrl);
+        const nowIso = new Date().toISOString();
+        const needsFullSync = shouldPerformFullCloudSync(localMeta, remoteMeta, hasCachedTemplates, force);
+
+        const nextMetaBase = {
+          organizationId: nextAuth.organizationId,
+          latestUpdatedAt: remoteMeta?.latestUpdatedAt || null,
+          templateCount: Number(remoteMeta?.templateCount || 0),
+          lastCheckedAt: nowIso
+        };
+
+        if (needsFullSync) {
+          const templatesPayload = await fetchCloudJson("/api/v1/extension/templates", nextAuth.apiToken, nextAuth.apiBaseUrl);
+          const split = splitCloudTemplatesByType(templatesPayload?.templates);
+          const emailTemplates = App.normalizeCloudTemplateArray(split.email, "EMAIL", nextAuth.organizationId);
+          const whatsappTemplates = App.normalizeCloudTemplateArray(split.whatsapp, "WHATSAPP", nextAuth.organizationId);
+          const noteTemplates = App.normalizeCloudTemplateArray(split.note, "NOTE", nextAuth.organizationId);
+          if (cacheKeys) {
+            await chrome.storage.local.set({
+              [cacheKeys.emailKey]: emailTemplates,
+              [cacheKeys.whatsappKey]: whatsappTemplates,
+              [cacheKeys.noteKey]: noteTemplates,
+              [cacheKeys.metaKey]: {
+                ...nextMetaBase,
+                lastFullSyncAt: nowIso
+              }
+            });
+          }
+        } else if (cacheKeys) {
+          await chrome.storage.local.set({
+            [cacheKeys.metaKey]: {
+              ...nextMetaBase,
+              lastFullSyncAt: String(localMeta?.lastFullSyncAt || nowIso)
+            }
+          });
+        }
+
+        results.push({
+          organizationId: nextAuth.organizationId,
+          organizationName: nextAuth.organizationName || nextAuth.organizationSlug || nextAuth.organizationId,
+          ok: true,
+          fullSync: needsFullSync
+        });
+      } catch (error) {
+        const reason = String(error?.message || "Cloud sync failed.");
+        if (shouldDisconnectCloudAuth(error)) {
+          await clearCloudConnection({
+            showToast: false,
+            organizationId: auth.organizationId,
+            statusMessage: "Team access key is invalid or revoked. Shared templates disconnected."
+          });
+          results.push({
+            organizationId: auth.organizationId,
+            organizationName: auth.organizationName || auth.organizationSlug || auth.organizationId,
+            ok: false,
+            error: reason,
+            disconnected: true
+          });
+          continue;
+        }
+        results.push({
+          organizationId: auth.organizationId,
+          organizationName: auth.organizationName || auth.organizationSlug || auth.organizationId,
+          ok: false,
+          error: reason
+        });
+      }
+    }
+
+    await persistCloudAuthState();
+    await loadCloudCacheFromStorage();
+    rerenderTemplateViewsForCloudChange();
+
+    const successCount = results.filter((item) => item.ok).length;
+    const failed = results.filter((item) => !item.ok);
+    if (!silent) {
+      if (!failed.length) {
+        App.setStatus(targetOrgId ? "Cloud templates refreshed." : `Cloud templates refreshed for ${successCount} org(s).`);
+      } else {
+        App.setStatus(`Cloud refresh finished: ${successCount} succeeded, ${failed.length} failed.`);
+      }
+    }
+    if (showToast && typeof App.showToast === "function") {
+      if (!failed.length) {
+        App.showToast(targetOrgId ? "Cloud templates refreshed." : `Cloud templates refreshed for ${successCount} org(s).`);
+      } else {
+        App.showToast(`Cloud refresh finished: ${successCount} succeeded, ${failed.length} failed.`, 3200);
+      }
+    }
+
+    return { ok: failed.length === 0, results };
   }
 
-  async function saveCloudApiToken() {
-    const rawToken = String(dom.cloudApiTokenInput?.value || "").trim();
+  async function saveCloudApiToken(identifier) {
+    const target = String(identifier || "").trim();
+    if (!target) return;
     const apiBaseUrl = constants.CLOUD_API_BASE_URL;
-
+    const tokenInput = Array.from(dom.cloudAuthCardsEl?.querySelectorAll("[data-cloud-token-input]") || []).find((input) => {
+      if (!(input instanceof HTMLInputElement)) return false;
+      return (
+        String(input.getAttribute("data-cloud-auth-org-id") || "").trim() === target ||
+        String(input.getAttribute("data-cloud-pending-row-id") || "").trim() === target
+      );
+    });
+    const rawToken = String(tokenInput?.value || "").trim();
     if (!rawToken) {
-      await clearCloudConnection({ showToast: true, statusMessage: "Cloud API token removed." });
+      App.setStatus("Access key is required.");
       return;
     }
 
-    const previousAuth = state.cloud.auth;
-    renderCloudConnectionStatus("Validating token...");
-    App.setStatus("Validating cloud API token...");
+    if (getCloudConnectionCount() >= constants.MAX_CLOUD_ORG_CONNECTIONS && !findCloudAuthByOrgId(target)) {
+      App.setStatus("You can connect up to 5 org keys.");
+      return;
+    }
+
+    renderCloudConnectionStatus("Checking access key...");
+    App.setStatus("Checking team access key...");
 
     try {
       const me = await fetchCloudJson("/api/v1/extension/me", rawToken, apiBaseUrl);
@@ -718,8 +900,27 @@
         throw new Error("Cloud token is missing organization scope.");
       }
 
-      state.cloud.auth = nextAuth;
-      await chrome.storage.local.set({ [constants.CLOUD_AUTH_LOCAL_KEY]: nextAuth });
+      const existingByOrg = findCloudAuthByOrgId(nextAuth.organizationId);
+      if (existingByOrg && existingByOrg.organizationId !== target) {
+        throw new Error("This org is already connected.");
+      }
+
+      const previousForTarget = findCloudAuthByOrgId(target);
+      if (previousForTarget && previousForTarget.organizationId !== nextAuth.organizationId) {
+        const oldCacheKeys = getCloudCacheKeys(previousForTarget.organizationId);
+        if (oldCacheKeys) {
+          await chrome.storage.local.remove([oldCacheKeys.emailKey, oldCacheKeys.whatsappKey, oldCacheKeys.noteKey, oldCacheKeys.metaKey]);
+        }
+      }
+
+      state.cloud.authList = normalizeCloudAuthList([
+        ...(state.cloud.authList || []).filter((item) => item.organizationId !== target && item.organizationId !== nextAuth.organizationId),
+        nextAuth
+      ]);
+      cloudPendingRows = cloudPendingRows.filter((rowId) => rowId !== target);
+      delete cloudPendingTokenDrafts[target];
+
+      await persistCloudAuthState();
       await loadCloudCacheFromStorage(nextAuth);
       const result = await refreshCloudTemplates({ force: true, showToast: false, silent: true });
       if (!result.ok) {
@@ -727,44 +928,118 @@
       }
 
       renderCloudConnectionStatus();
+      renderCloudAuthCards();
       rerenderTemplateViewsForCloudChange();
-      App.setStatus("Cloud API token saved and connected.");
+      App.setStatus("Team access key saved and connected.");
       if (typeof App.showToast === "function") {
-        App.showToast("Cloud API token saved.");
+        App.showToast("Team access key saved.");
       }
     } catch (error) {
-      state.cloud.auth = previousAuth || null;
-      await loadCloudCacheFromStorage(state.cloud.auth);
-      const rawReason = String(error?.message || "Could not validate cloud API token.");
+      const rawReason = String(error?.message || "Could not verify team access key.");
       const reason = rawReason.includes("404")
         ? rawReason + ". Ensure cloud backend is deployed."
         : rawReason;
       renderCloudConnectionStatus(reason);
-      App.setStatus(`Cloud token failed: ${reason}`);
+      App.setStatus(`Team access key failed: ${reason}`);
       if (typeof App.showToast === "function") {
-        App.showToast(`Token failed: ${reason}`, 3200);
+        App.showToast(`Access key failed: ${reason}`, 3200);
       }
     }
   }
 
-  async function refreshCloudTemplatesNow() {
-    if (dom.refreshCloudTemplatesBtn) {
-      dom.refreshCloudTemplatesBtn.classList.add("is-spinning");
-      dom.refreshCloudTemplatesBtn.disabled = true;
+  function addCloudAuthRow() {
+    if (!canAddMoreCloudRows()) {
+      App.setStatus("You can connect up to 5 org keys.");
+      return;
+    }
+    cloudPendingRows.push(createCloudPendingRow());
+    renderCloudAuthCards();
+  }
+
+  function removeCloudPendingRow(rowIdInput) {
+    const rowId = String(rowIdInput || "").trim();
+    if (!rowId) return;
+    cloudPendingRows = cloudPendingRows.filter((item) => item !== rowId);
+    delete cloudPendingTokenDrafts[rowId];
+    ensureDefaultPendingCloudRow();
+    renderCloudAuthCards();
+  }
+
+  async function refreshCloudTemplatesNow(organizationIdInput = "") {
+    const targetOrgId = String(organizationIdInput || "").trim();
+    if (!targetOrgId) {
+      await refreshCloudTemplates({ force: true, showToast: true, silent: false });
+      return;
+    }
+    const refreshBtn = Array.from(dom.cloudAuthCardsEl?.querySelectorAll("[data-cloud-refresh-btn]") || []).find((button) => {
+      if (!(button instanceof HTMLButtonElement)) return false;
+      return String(button.getAttribute("data-cloud-auth-org-id") || "").trim() === targetOrgId;
+    });
+    if (refreshBtn) {
+      refreshBtn.classList.add("is-spinning");
+      refreshBtn.disabled = true;
     }
 
     try {
-      await refreshCloudTemplates({ force: true, showToast: true, silent: false });
+      await refreshCloudTemplates({ force: true, showToast: true, silent: false, organizationId: targetOrgId });
     } finally {
-      if (dom.refreshCloudTemplatesBtn) {
-        dom.refreshCloudTemplatesBtn.classList.remove("is-spinning");
-        dom.refreshCloudTemplatesBtn.disabled = false;
+      if (refreshBtn) {
+        refreshBtn.classList.remove("is-spinning");
+        refreshBtn.disabled = false;
       }
     }
   }
 
   async function refreshCloudTemplatesSessionCheck() {
     await refreshCloudTemplates({ force: false, showToast: false, silent: true });
+  }
+
+  async function onCloudAuthCardsClick(event) {
+    const target = event?.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const connectBtn = target.closest("[data-cloud-connect-btn]");
+    if (connectBtn instanceof HTMLElement) {
+      const orgId = String(connectBtn.getAttribute("data-cloud-auth-org-id") || "").trim();
+      const pendingId = String(connectBtn.getAttribute("data-cloud-pending-row-id") || "").trim();
+      await saveCloudApiToken(orgId || pendingId);
+      return;
+    }
+
+    const refreshBtn = target.closest("[data-cloud-refresh-btn]");
+    if (refreshBtn instanceof HTMLElement) {
+      const orgId = String(refreshBtn.getAttribute("data-cloud-auth-org-id") || "").trim();
+      await refreshCloudTemplatesNow(orgId);
+      return;
+    }
+
+    const removeBtn = target.closest("[data-cloud-remove-btn]");
+    if (removeBtn instanceof HTMLElement) {
+      const orgId = String(removeBtn.getAttribute("data-cloud-auth-org-id") || "").trim();
+      if (!orgId) return;
+      const confirmed = window.confirm("Remove this org key connection?");
+      if (!confirmed) return;
+      await clearCloudConnection({ organizationId: orgId, statusMessage: "Team access key removed." });
+      renderCloudAuthCards();
+      return;
+    }
+
+    const removePendingBtn = target.closest("[data-cloud-remove-pending-btn]");
+    if (removePendingBtn instanceof HTMLElement) {
+      const pendingId = String(removePendingBtn.getAttribute("data-cloud-pending-row-id") || "").trim();
+      removeCloudPendingRow(pendingId);
+    }
+  }
+
+  function onCloudAuthCardsInput(event) {
+    const target = event?.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (!target.hasAttribute("data-cloud-token-input")) return;
+
+    const pendingId = String(target.getAttribute("data-cloud-pending-row-id") || "").trim();
+    if (pendingId) {
+      cloudPendingTokenDrafts[pendingId] = String(target.value || "");
+    }
   }
 
   async function saveEmailSettings(options = {}) {
@@ -1143,7 +1418,9 @@
         constants.NOTE_TEMPLATES_LOCAL_KEY,
         constants.TEMPLATE_USAGE_LOCAL_KEY,
         constants.QUICK_NOTES_LOCAL_KEY,
-        constants.CLOUD_AUTH_LOCAL_KEY
+        constants.CLOUD_AUTH_LOCAL_KEY,
+        constants.CLOUD_AUTH_LIST_LOCAL_KEY,
+        constants.CLOUD_ACTIVE_ORG_ID_LOCAL_KEY
       ])
     ]);
     const saved = syncResult[constants.SETTINGS_KEY];
@@ -1160,6 +1437,7 @@
     const savedTemplateUsage = localResult[constants.TEMPLATE_USAGE_LOCAL_KEY];
     const savedQuickNotes = localResult[constants.QUICK_NOTES_LOCAL_KEY];
     const savedCloudAuth = localResult[constants.CLOUD_AUTH_LOCAL_KEY];
+    const savedCloudAuthList = localResult[constants.CLOUD_AUTH_LIST_LOCAL_KEY];
     const hasLocalEmailTemplates = Array.isArray(localEmailTemplates);
     const hasLocalWhatsappTemplates = Array.isArray(localWhatsappTemplates);
     const hasLocalNoteTemplates = Array.isArray(localNoteTemplates);
@@ -1181,10 +1459,12 @@
       whatsappTemplates,
       noteTemplates
     };
-    state.cloud.auth = App.normalizeCloudAuth(savedCloudAuth);
-    if (!state.cloud.auth && dom.cloudApiBaseUrlInput) {
-      dom.cloudApiBaseUrlInput.value = String(constants.CLOUD_API_BASE_URL);
-    }
+    const migratedList = normalizeCloudAuthList(savedCloudAuthList);
+    const legacyAuth = App.normalizeCloudAuth(savedCloudAuth);
+    state.cloud.authList = migratedList.length ? migratedList : legacyAuth ? [legacyAuth] : [];
+    const primaryAuth = state.cloud.authList[0] || null;
+    state.cloud.activeOrganizationId = "";
+    state.cloud.auth = primaryAuth;
     state.settings.messageTemplate = "";
     state.settings.noteTemplate = "";
     state.settings.themeMode = App.normalizeThemeMode(state.settings.themeMode);
@@ -1223,6 +1503,8 @@
       await Promise.all(writes);
     }
 
+    await persistCloudAuthState();
+    ensureDefaultPendingCloudRow();
     await loadCloudCacheFromStorage(state.cloud.auth);
   }
 
@@ -1293,8 +1575,14 @@
     onImportTemplatesInputChange,
     openTemplateImportReview,
     closeTemplateImportReview,
+    openCloudTokenInfoDialog,
+    closeCloudTokenInfoDialog,
     applyTemplateImport,
     renderCloudConnectionStatus,
+    renderCloudAuthCards,
+    addCloudAuthRow,
+    onCloudAuthCardsClick,
+    onCloudAuthCardsInput,
     saveCloudApiToken,
     refreshCloudTemplates,
     refreshCloudTemplatesNow,

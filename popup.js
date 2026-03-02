@@ -11,16 +11,14 @@
   if (dom.noteSettingsBtn) dom.noteSettingsBtn.addEventListener("click", App.toggleNoteSettings);
   dom.cancelSettingsBtn.addEventListener("click", App.closeSettings);
   dom.saveSettingsBtn.addEventListener("click", App.saveSettings);
-  if (dom.saveCloudTokenBtn) {
-    dom.saveCloudTokenBtn.addEventListener("click", () => {
-      void App.saveCloudApiToken();
+  if (dom.addCloudAuthBtn) dom.addCloudAuthBtn.addEventListener("click", App.addCloudAuthRow);
+  if (dom.cloudAuthCardsEl) {
+    dom.cloudAuthCardsEl.addEventListener("click", (event) => {
+      void App.onCloudAuthCardsClick(event);
     });
+    dom.cloudAuthCardsEl.addEventListener("input", App.onCloudAuthCardsInput);
   }
-  if (dom.refreshCloudTemplatesBtn) {
-    dom.refreshCloudTemplatesBtn.addEventListener("click", () => {
-      void App.refreshCloudTemplatesNow();
-    });
-  }
+  if (dom.cloudTokenInfoBtn) dom.cloudTokenInfoBtn.addEventListener("click", App.openCloudTokenInfoDialog);
 
   if (dom.addEmailTemplateBtn) {
     dom.addEmailTemplateBtn.addEventListener("click", App.addEmailTemplateDraft);
@@ -100,6 +98,11 @@
       if (event.target === dom.templateImportOverlay) App.closeTemplateImportReview();
     });
   }
+  if (dom.cloudTokenInfoOverlay) {
+    dom.cloudTokenInfoOverlay.addEventListener("click", (event) => {
+      if (event.target === dom.cloudTokenInfoOverlay) App.closeCloudTokenInfoDialog();
+    });
+  }
 
   if (dom.cancelEmailTemplatePickBtn) dom.cancelEmailTemplatePickBtn.addEventListener("click", App.closeEmailTemplatePicker);
   if (dom.cancelWhatsappTemplatePickBtn) dom.cancelWhatsappTemplatePickBtn.addEventListener("click", App.closeWhatsappTemplatePicker);
@@ -113,6 +116,7 @@
     });
   }
   if (dom.cancelTemplateImportBtn) dom.cancelTemplateImportBtn.addEventListener("click", App.closeTemplateImportReview);
+  if (dom.cloudTokenInfoCloseBtn) dom.cloudTokenInfoCloseBtn.addEventListener("click", App.closeCloudTokenInfoDialog);
   if (dom.applyTemplateImportBtn) dom.applyTemplateImportBtn.addEventListener("click", () => void App.applyTemplateImport());
   if (dom.whatsappTemplatePickSearchInput) {
     dom.whatsappTemplatePickSearchInput.addEventListener("input", (event) => {
