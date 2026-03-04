@@ -1,5 +1,5 @@
 (() => {
-  const DEFAULT_COUNTRY_CODE = "60";
+  const DEFAULT_COUNTRY_CODE = "";
   const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{6,}\d)/;
   const shared = globalThis.ContactPilotShared || {};
   const MESSAGE_TYPES = shared.MESSAGE_TYPES || Object.freeze({
@@ -147,8 +147,8 @@
     let text = cleanText(raw || "");
     if (!text) return "";
 
-    // Remove trailing short numeric fragments that can leak from adjacent date cells.
-    text = text.replace(/\s+\d{1,3}$/, "");
+    // Keep trailing digit groups intact (e.g. +90 544 157 14 74).
+    // Trimming short suffixes here can clip valid international numbers.
     return cleanText(text);
   }
 
@@ -157,19 +157,24 @@
     const digits = trimmed.replace(/\D/g, "");
     if (!digits) return null;
 
-    const prefix = String(countryPrefix || DEFAULT_COUNTRY_CODE).replace(/\D/g, "") || DEFAULT_COUNTRY_CODE;
+    const prefix = String(countryPrefix || DEFAULT_COUNTRY_CODE).replace(/\D/g, "");
 
     // International number already has explicit country code.
     if (trimmed.startsWith("+")) return digits;
     // International format with leading 00 (e.g. 0060...).
     if (digits.startsWith("00")) return digits.slice(2);
     // Already starts with configured prefix.
-    if (digits.startsWith(prefix)) return digits;
+    if (prefix && digits.startsWith(prefix)) return digits;
 
-    // Local format with trunk zero: 017... -> 60 + 17...
-    if (digits.startsWith("0")) return `${prefix}${digits.slice(1)}`;
-    // Short local numbers likely missing country code.
-    if (digits.length <= 9) return `${prefix}${digits}`;
+    if (prefix) {
+      // Local format with trunk zero: 017... -> 60 + 17...
+      if (digits.startsWith("0")) return `${prefix}${digits.slice(1)}`;
+      // Short local numbers likely missing country code.
+      if (digits.length <= 9) return `${prefix}${digits}`;
+    } else {
+      // No default prefix configured: avoid guessing for local numbers.
+      if (digits.startsWith("0")) return null;
+    }
 
     // Looks like a full international number without +.
     return digits;

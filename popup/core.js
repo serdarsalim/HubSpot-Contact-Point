@@ -178,7 +178,7 @@
   };
   const DEFAULT_SETTINGS = {
     themeMode: "light",
-    countryPrefix: "60",
+    countryPrefix: "",
     messageTemplate: "",
     noteTemplate: "",
     rowFilterWord: "",

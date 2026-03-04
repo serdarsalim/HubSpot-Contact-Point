@@ -110,7 +110,7 @@
       } catch (_error) {}
     }
 
-    return String(phoneRawValue || "").replace(/\D/g, "");
+    return "";
   }
 
   function buildBlankWhatsappUrl(contact, phoneRawValue) {

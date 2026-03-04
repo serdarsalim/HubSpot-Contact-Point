@@ -318,24 +318,118 @@
     if (dom.whatsappTemplatePickSearchInput) dom.whatsappTemplatePickSearchInput.value = "";
   }
 
-  function getPhoneDigitsForContact(contact) {
-    const directDigits = String(contact?.phoneDigits || "").replace(/\D/g, "");
-    if (directDigits) return directDigits;
+  function getRawPhoneValueForContact(contact) {
+    const phoneDisplay = String(contact?.phoneDisplay || "").trim();
+    if (phoneDisplay) return phoneDisplay;
 
-    const waUrl = String(contact?.waUrl || "");
-    if (!waUrl) return "";
-    try {
-      const parsed = new URL(waUrl);
-      const fromParam = String(parsed.searchParams.get("phone") || "").replace(/\D/g, "");
-      if (fromParam) return fromParam;
-    } catch (_error) {
-      return "";
+    const values = contact?.values && typeof contact.values === "object" ? contact.values : {};
+    const directCandidates = [values.phone, values.mobile, values.whatsapp, values.phone_number];
+    for (const candidate of directCandidates) {
+      const text = String(candidate || "").trim();
+      if (text) return text;
+    }
+
+    for (const [field, value] of Object.entries(values)) {
+      if (!/(phone|mobile|whatsapp)/i.test(String(field || ""))) continue;
+      const text = String(value || "").trim();
+      if (text) return text;
     }
     return "";
   }
 
-  function buildWhatsappUrl(contact, template) {
-    const phoneDigits = getPhoneDigitsForContact(contact);
+  function normalizePhoneDigits(rawPhone, countryPrefixInput = "") {
+    const raw = String(rawPhone || "").trim();
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return "";
+
+    if (raw.startsWith("+")) return digits;
+    if (digits.startsWith("00")) return digits.slice(2);
+
+    const countryPrefix = String(countryPrefixInput || "").replace(/\D/g, "");
+    if (countryPrefix && digits.startsWith(countryPrefix)) return digits;
+    if (countryPrefix) {
+      if (digits.startsWith("0")) return `${countryPrefix}${digits.slice(1)}`;
+      if (digits.length <= 9) return `${countryPrefix}${digits}`;
+    } else if (digits.startsWith("0")) {
+      return "";
+    }
+
+    return digits;
+  }
+
+  function shouldAskForDefaultCountryCode(rawPhone, countryPrefixInput = "") {
+    const countryPrefix = String(countryPrefixInput || "").replace(/\D/g, "");
+    if (countryPrefix) return false;
+
+    const raw = String(rawPhone || "").trim();
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return false;
+    if (raw.startsWith("+")) return false;
+    if (digits.startsWith("00")) return false;
+
+    return digits.startsWith("0") || digits.length <= 10;
+  }
+
+  async function ensureCountryPrefixForContact(contact) {
+    const rawPhone = getRawPhoneValueForContact(contact);
+    const currentPrefix = String(state.settings.countryPrefix || "").replace(/\D/g, "");
+    if (!shouldAskForDefaultCountryCode(rawPhone, currentPrefix)) {
+      return currentPrefix;
+    }
+
+    const entered = window.prompt(
+      "This number looks local and has no country code. Enter a default country code (numbers only, e.g. 90). You can change this later in Settings.",
+      currentPrefix
+    );
+    if (entered === null) {
+      App.setStatus("WhatsApp canceled. No default country code was set.");
+      return null;
+    }
+
+    const nextPrefix = String(entered || "").replace(/\D/g, "");
+    if (!nextPrefix) {
+      App.setStatus("Please enter a numeric country code. You can also set it from Settings.");
+      return null;
+    }
+
+    state.settings = { ...state.settings, countryPrefix: nextPrefix };
+    if (dom.countryPrefixInput) dom.countryPrefixInput.value = nextPrefix;
+
+    try {
+      if (typeof App.persistSyncSettings === "function") {
+        await App.persistSyncSettings(state.settings);
+      }
+    } catch (error) {
+      const reason = String(error?.message || error || "Unknown error.");
+      App.setStatus(`Could not save default country code: ${reason}`);
+      return null;
+    }
+
+    const savedMessage = `Default country code set to +${nextPrefix}. You can change this in Settings.`;
+    App.setStatus(savedMessage);
+    if (typeof App.showToast === "function") App.showToast(savedMessage, 3400);
+    return nextPrefix;
+  }
+
+  function getPhoneDigitsForContact(contact, countryPrefixInput = "") {
+    const directDigits = String(contact?.phoneDigits || "").replace(/\D/g, "");
+    if (directDigits) return directDigits;
+
+    const waUrl = String(contact?.waUrl || "");
+    if (waUrl) {
+      try {
+        const parsed = new URL(waUrl);
+        const fromParam = String(parsed.searchParams.get("phone") || "").replace(/\D/g, "");
+        if (fromParam) return fromParam;
+      } catch (_error) {}
+    }
+
+    const rawPhone = getRawPhoneValueForContact(contact);
+    return normalizePhoneDigits(rawPhone, countryPrefixInput);
+  }
+
+  function buildWhatsappUrl(contact, template, countryPrefixInput = "") {
+    const phoneDigits = getPhoneDigitsForContact(contact, countryPrefixInput);
     if (!phoneDigits) return "";
 
     const tokens = App.getContactTokenMap(contact);
@@ -351,7 +445,10 @@
       return;
     }
 
-    const waUrl = buildWhatsappUrl(contact, template);
+    const countryPrefix = await ensureCountryPrefixForContact(contact);
+    if (countryPrefix === null) return;
+
+    const waUrl = buildWhatsappUrl(contact, template, countryPrefix || state.settings.countryPrefix);
     if (!waUrl) {
       App.setStatus("Could not build WhatsApp link. Missing phone number.");
       return;

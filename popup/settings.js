@@ -429,7 +429,7 @@
     });
 
     return {
-      countryPrefix: (dom.countryPrefixInput.value || "").replace(/\D/g, "") || "60",
+      countryPrefix: (dom.countryPrefixInput.value || "").replace(/\D/g, ""),
       messageTemplate: String(dom.messageTemplateInput?.value || "").trim(),
       noteTemplate: String(dom.noteTemplateInput?.value || "").trim(),
       rowFilterWord: String(dom.rowFilterInput?.value || "")
