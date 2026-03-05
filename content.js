@@ -23,6 +23,12 @@
     emailComposerOpenDelayMs: 300
   });
   const SETTINGS_KEY = "popupSettings";
+  const EMAIL_TEMPLATES_LOCAL_KEY = "popupEmailTemplates";
+  const WHATSAPP_TEMPLATES_LOCAL_KEY = "popupWhatsappTemplates";
+  const NOTE_TEMPLATES_LOCAL_KEY = "popupNoteTemplates";
+  const INLINE_QUICK_ACTIONS_ROOT_ID = "cpInlineQuickActionsRoot";
+  const INLINE_QUICK_ACTIONS_STYLE_ID = "cpInlineQuickActionsStyle";
+  const INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS = 900;
   const DARK_READER_THEME = Object.freeze({
     brightness: 100,
     contrast: 90,
@@ -1635,8 +1641,521 @@
     await applyEmailTemplateOnPage(subject, body, bodyHtml);
   }
 
+  const inlineQuickActionsState = {
+    rootEl: null,
+    panelEl: null,
+    statusEl: null,
+    activeKind: "",
+    templates: {
+      email: [],
+      note: [],
+      whatsapp: []
+    },
+    countryPrefix: DEFAULT_COUNTRY_CODE,
+    busy: false,
+    lastUrl: "",
+    watcherTimerId: 0
+  };
+
+  function readStorageArea(areaName, keys) {
+    return new Promise((resolve) => {
+      try {
+        const area = chrome.storage?.[areaName];
+        if (!area || typeof area.get !== "function") {
+          resolve({});
+          return;
+        }
+        area.get(keys, (result) => {
+          if (chrome.runtime.lastError) {
+            resolve({});
+            return;
+          }
+          resolve(result || {});
+        });
+      } catch (_error) {
+        resolve({});
+      }
+    });
+  }
+
+  function inlineTokenKey(input) {
+    return String(input || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  function applyInlineTemplateTokens(text, tokens) {
+    return String(text || "").replace(/\[([a-z0-9_]+)\]/gi, (_match, tokenName) => {
+      const key = inlineTokenKey(tokenName);
+      if (!Object.prototype.hasOwnProperty.call(tokens, key)) return "";
+      return String(tokens[key] || "");
+    });
+  }
+
+  function buildInlineTemplateTokens(context) {
+    const values = context?.contact?.values || {};
+    const name = cleanText(values.name || "");
+    const firstName = name ? name.split(" ")[0] : "";
+    const owner = cleanText(values.owner || context?.owner || "");
+    const email = cleanText(values.email || "");
+    const phone = cleanText(values.phone || "");
+    const recordId = cleanText(context?.recordId || values.record_id || "");
+
+    const tokens = {
+      name,
+      first_name: firstName,
+      firstname: firstName,
+      owner,
+      email,
+      phone,
+      record_id: recordId,
+      recordid: recordId
+    };
+
+    for (const [rawKey, rawValue] of Object.entries(values)) {
+      const key = inlineTokenKey(rawKey);
+      if (!key) continue;
+      tokens[key] = cleanText(rawValue || "");
+    }
+
+    return tokens;
+  }
+
+  function escapeTokenValues(tokens) {
+    const escaped = {};
+    for (const [key, value] of Object.entries(tokens || {})) {
+      escaped[key] = escapeHtml(String(value || ""));
+    }
+    return escaped;
+  }
+
+  function normalizeInlineEmailTemplates(rawTemplates) {
+    const source = Array.isArray(rawTemplates) ? rawTemplates : [];
+    return source
+      .map((template, index) => ({
+        id: cleanText(template?.id || `email_template_${index + 1}`),
+        name: cleanText(template?.name || `Email ${index + 1}`) || `Email ${index + 1}`,
+        subject: String(template?.subject || ""),
+        body: String(template?.body || "")
+      }))
+      .filter((template) => !!template.id);
+  }
+
+  function normalizeInlineNoteTemplates(rawTemplates) {
+    const source = Array.isArray(rawTemplates) ? rawTemplates : [];
+    return source
+      .map((template, index) => ({
+        id: cleanText(template?.id || `note_template_${index + 1}`),
+        name: cleanText(template?.name || `Note ${index + 1}`) || `Note ${index + 1}`,
+        body: String(template?.body || "")
+      }))
+      .filter((template) => !!template.id);
+  }
+
+  function normalizeInlineWhatsappTemplates(rawTemplates) {
+    const source = Array.isArray(rawTemplates) ? rawTemplates : [];
+    return source
+      .map((template, index) => ({
+        id: cleanText(template?.id || `wa_template_${index + 1}`),
+        name: cleanText(template?.name || `WhatsApp ${index + 1}`) || `WhatsApp ${index + 1}`,
+        body: String(template?.body || "")
+      }))
+      .filter((template) => !!template.id);
+  }
+
+  async function refreshInlineQuickActionsData() {
+    const local = await readStorageArea("local", [
+      EMAIL_TEMPLATES_LOCAL_KEY,
+      NOTE_TEMPLATES_LOCAL_KEY,
+      WHATSAPP_TEMPLATES_LOCAL_KEY
+    ]);
+    const sync = await readStorageArea("sync", [SETTINGS_KEY]);
+
+    inlineQuickActionsState.templates.email = normalizeInlineEmailTemplates(local?.[EMAIL_TEMPLATES_LOCAL_KEY]);
+    inlineQuickActionsState.templates.note = normalizeInlineNoteTemplates(local?.[NOTE_TEMPLATES_LOCAL_KEY]);
+    inlineQuickActionsState.templates.whatsapp = normalizeInlineWhatsappTemplates(local?.[WHATSAPP_TEMPLATES_LOCAL_KEY]);
+    inlineQuickActionsState.countryPrefix = String(sync?.[SETTINGS_KEY]?.countryPrefix || DEFAULT_COUNTRY_CODE);
+  }
+
+  function ensureInlineQuickActionsStyles() {
+    if (document.getElementById(INLINE_QUICK_ACTIONS_STYLE_ID)) return;
+    const styleEl = document.createElement("style");
+    styleEl.id = INLINE_QUICK_ACTIONS_STYLE_ID;
+    styleEl.textContent = `
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} {
+        position: fixed;
+        right: 14px;
+        bottom: 14px;
+        z-index: 2147483000;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-card {
+        min-width: 228px;
+        max-width: 280px;
+        border: 1px solid #c8d5e5;
+        background: #f7fbff;
+        border-radius: 10px;
+        box-shadow: 0 6px 18px rgba(15, 40, 70, 0.18);
+        color: #29435e;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-head {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        padding: 8px 10px 4px;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-actions-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px 8px;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-divider {
+        color: #8aa2be;
+        font-size: 12px;
+        line-height: 1;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: #2f4f6f;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn:hover {
+        background: rgba(83, 136, 194, 0.14);
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn.active {
+        background: rgba(83, 136, 194, 0.18);
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID}[data-busy="1"] .cp-inline-action-btn {
+        opacity: 0.65;
+        cursor: wait;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel {
+        border-top: 1px solid #d8e4f2;
+        padding: 8px 8px 6px;
+        max-height: 220px;
+        overflow: auto;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn {
+        display: block;
+        width: 100%;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        font-size: 12px;
+        padding: 6px 7px;
+        cursor: pointer;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn:hover {
+        background: rgba(83, 136, 194, 0.14);
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-empty {
+        font-size: 12px;
+        color: #6d839a;
+        padding: 6px 7px;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status {
+        min-height: 16px;
+        font-size: 11px;
+        color: #5f7994;
+        padding: 0 10px 8px;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status[data-tone="error"] {
+        color: #af2f2f;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status[data-tone="success"] {
+        color: #19733d;
+      }
+    `;
+    document.documentElement.appendChild(styleEl);
+  }
+
+  function inlineActionIcon(kind) {
+    if (kind === "email") {
+      return "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='3.5' y='6.5' width='17' height='11' rx='2'></rect><path d='M4 8l8 5 8-5'></path></svg>";
+    }
+    if (kind === "note") {
+      return "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M4 20h4l10-10-4-4L4 16v4z'></path><path d='M13 7l4 4'></path></svg>";
+    }
+    return "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M12 4c4.7 0 8.5 3.4 8.5 7.5S16.7 19 12 19c-1 0-2-.2-2.9-.5L4 20l1.4-3.8C4.5 14.9 4 13.2 4 11.5 4 7.4 7.8 4 12 4z'></path><circle cx='9' cy='11.5' r='0.9'></circle><circle cx='12' cy='11.5' r='0.9'></circle><circle cx='15' cy='11.5' r='0.9'></circle></svg>";
+  }
+
+  function setInlineQuickActionsStatus(message, tone = "") {
+    if (!inlineQuickActionsState.statusEl) return;
+    inlineQuickActionsState.statusEl.textContent = String(message || "");
+    inlineQuickActionsState.statusEl.dataset.tone = tone;
+  }
+
+  function setInlineQuickActionsBusy(busy) {
+    inlineQuickActionsState.busy = !!busy;
+    if (!inlineQuickActionsState.rootEl) return;
+    inlineQuickActionsState.rootEl.dataset.busy = busy ? "1" : "0";
+  }
+
+  function renderInlineQuickActionButtons() {
+    if (!inlineQuickActionsState.rootEl) return;
+    inlineQuickActionsState.rootEl.querySelectorAll(".cp-inline-action-btn").forEach((button) => {
+      const kind = String(button.getAttribute("data-kind") || "");
+      button.classList.toggle("active", kind === inlineQuickActionsState.activeKind);
+      button.disabled = inlineQuickActionsState.busy;
+    });
+  }
+
+  function renderInlineQuickActionsPanel(kind = "") {
+    if (!inlineQuickActionsState.panelEl) return;
+    inlineQuickActionsState.activeKind = String(kind || "");
+    renderInlineQuickActionButtons();
+
+    if (!inlineQuickActionsState.activeKind) {
+      inlineQuickActionsState.panelEl.hidden = true;
+      inlineQuickActionsState.panelEl.innerHTML = "";
+      return;
+    }
+
+    const templates = inlineQuickActionsState.templates?.[inlineQuickActionsState.activeKind] || [];
+    inlineQuickActionsState.panelEl.hidden = false;
+    if (!templates.length) {
+      const label = inlineQuickActionsState.activeKind === "whatsapp" ? "WhatsApp" : inlineQuickActionsState.activeKind[0].toUpperCase() + inlineQuickActionsState.activeKind.slice(1);
+      inlineQuickActionsState.panelEl.innerHTML = `<div class='cp-inline-empty'>No ${escapeHtml(label)} templates.</div>`;
+      return;
+    }
+
+    inlineQuickActionsState.panelEl.innerHTML = templates
+      .map(
+        (template) =>
+          `<button type='button' class='cp-inline-template-btn' data-template-kind='${escapeHtml(inlineQuickActionsState.activeKind)}' data-template-id='${escapeHtml(template.id)}'>${escapeHtml(template.name || "Untitled")}</button>`
+      )
+      .join("");
+  }
+
+  function isInlineQuickActionsEligiblePage() {
+    return inferObjectKindFromPath() === "contact" && !!getRecordIdFromPath();
+  }
+
+  function getInlineContactContextOrThrow() {
+    const context = getActiveTabContext(inlineQuickActionsState.countryPrefix, "");
+    if (context?.kind !== "contact" || !context?.recordId) {
+      throw new Error("Open a HubSpot contact record page first.");
+    }
+    return context;
+  }
+
+  async function applyInlineEmailTemplate(template) {
+    const context = getInlineContactContextOrThrow();
+    const tokens = buildInlineTemplateTokens(context);
+    const escapedTokens = escapeTokenValues(tokens);
+    const subject = applyInlineTemplateTokens(template?.subject || "", tokens).trim();
+    const bodyHtml = applyInlineTemplateTokens(template?.body || "", escapedTokens).trim();
+    const bodyText = applyInlineTemplateTokens(template?.body || "", tokens).trim();
+    await openEmailAndApplyTemplateOnPage(subject, htmlToPlainText(bodyText), bodyHtml);
+  }
+
+  async function applyInlineNoteTemplate(template) {
+    const context = getInlineContactContextOrThrow();
+    const tokens = buildInlineTemplateTokens(context);
+    const filledBody = applyInlineTemplateTokens(template?.body || "", tokens).trim();
+    const noteBody = htmlToPlainText(filledBody) || filledBody;
+    if (!noteBody) throw new Error("Selected note template is empty.");
+    await createNoteOnPage(noteBody);
+  }
+
+  function applyInlineWhatsappTemplate(template) {
+    const context = getInlineContactContextOrThrow();
+    const tokens = buildInlineTemplateTokens(context);
+    const phoneDigits =
+      String(context?.contact?.phoneDigits || "").replace(/\D/g, "") ||
+      String(normalizePhone(context?.contact?.values?.phone || "", inlineQuickActionsState.countryPrefix) || "").replace(/\D/g, "");
+    if (!phoneDigits) throw new Error("No phone number found on this contact.");
+
+    const filledMessage = applyInlineTemplateTokens(template?.body || "", tokens).trim();
+    let url = `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number`;
+    if (filledMessage) {
+      url += `&text=${encodeURIComponent(filledMessage)}`;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleInlineTemplateSelection(kind, templateId) {
+    if (inlineQuickActionsState.busy) return;
+    const templates = inlineQuickActionsState.templates?.[kind] || [];
+    const template = templates.find((item) => String(item?.id || "") === String(templateId || ""));
+    if (!template) {
+      setInlineQuickActionsStatus("Template not found.", "error");
+      return;
+    }
+
+    setInlineQuickActionsBusy(true);
+    setInlineQuickActionsStatus("Working...");
+    try {
+      if (kind === "email") {
+        await applyInlineEmailTemplate(template);
+        setInlineQuickActionsStatus(`Email applied: ${template.name}`, "success");
+      } else if (kind === "note") {
+        await applyInlineNoteTemplate(template);
+        setInlineQuickActionsStatus(`Note created: ${template.name}`, "success");
+      } else if (kind === "whatsapp") {
+        applyInlineWhatsappTemplate(template);
+        setInlineQuickActionsStatus(`WhatsApp opened: ${template.name}`, "success");
+      }
+      renderInlineQuickActionsPanel("");
+    } catch (error) {
+      const reason = cleanText(String(error?.message || error || "Action failed."));
+      setInlineQuickActionsStatus(reason || "Action failed.", "error");
+    } finally {
+      setInlineQuickActionsBusy(false);
+    }
+  }
+
+  async function handleInlineActionButtonToggle(kind) {
+    if (inlineQuickActionsState.busy) return;
+    const selectedKind = String(kind || "");
+    if (!selectedKind) return;
+
+    await refreshInlineQuickActionsData();
+
+    if (inlineQuickActionsState.activeKind === selectedKind) {
+      renderInlineQuickActionsPanel("");
+      return;
+    }
+    renderInlineQuickActionsPanel(selectedKind);
+  }
+
+  function handleInlineRootClick(event) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    const actionButton = target.closest(".cp-inline-action-btn");
+    if (actionButton) {
+      const kind = String(actionButton.getAttribute("data-kind") || "");
+      void handleInlineActionButtonToggle(kind);
+      return;
+    }
+
+    const templateButton = target.closest(".cp-inline-template-btn");
+    if (templateButton) {
+      const kind = String(templateButton.getAttribute("data-template-kind") || "");
+      const templateId = String(templateButton.getAttribute("data-template-id") || "");
+      if (!kind || !templateId) return;
+      void handleInlineTemplateSelection(kind, templateId);
+    }
+  }
+
+  function closeInlinePanelWhenClickingOutside(event) {
+    if (!inlineQuickActionsState.rootEl) return;
+    if (!inlineQuickActionsState.activeKind) return;
+    const target = event.target instanceof Node ? event.target : null;
+    if (!target) return;
+    if (inlineQuickActionsState.rootEl.contains(target)) return;
+    renderInlineQuickActionsPanel("");
+  }
+
+  function mountInlineQuickActions() {
+    if (inlineQuickActionsState.rootEl || !document.body) return;
+    ensureInlineQuickActionsStyles();
+
+    const rootEl = document.createElement("div");
+    rootEl.id = INLINE_QUICK_ACTIONS_ROOT_ID;
+    rootEl.dataset.busy = "0";
+    rootEl.innerHTML = `
+      <div class='cp-inline-card'>
+        <div class='cp-inline-head'>contact point.</div>
+        <div class='cp-inline-actions-row'>
+          <button type='button' class='cp-inline-action-btn' data-kind='email' aria-label='Email templates' title='Email templates'>${inlineActionIcon("email")}</button>
+          <span class='cp-inline-divider'>|</span>
+          <button type='button' class='cp-inline-action-btn' data-kind='note' aria-label='Note templates' title='Note templates'>${inlineActionIcon("note")}</button>
+          <span class='cp-inline-divider'>|</span>
+          <button type='button' class='cp-inline-action-btn' data-kind='whatsapp' aria-label='WhatsApp templates' title='WhatsApp templates'>${inlineActionIcon("whatsapp")}</button>
+        </div>
+        <div class='cp-inline-panel' hidden></div>
+        <div class='cp-inline-status' aria-live='polite'></div>
+      </div>
+    `;
+
+    rootEl.addEventListener("click", handleInlineRootClick);
+    document.body.appendChild(rootEl);
+    inlineQuickActionsState.rootEl = rootEl;
+    inlineQuickActionsState.panelEl = rootEl.querySelector(".cp-inline-panel");
+    inlineQuickActionsState.statusEl = rootEl.querySelector(".cp-inline-status");
+    renderInlineQuickActionButtons();
+  }
+
+  function unmountInlineQuickActions() {
+    if (!inlineQuickActionsState.rootEl) return;
+    inlineQuickActionsState.rootEl.removeEventListener("click", handleInlineRootClick);
+    inlineQuickActionsState.rootEl.remove();
+    inlineQuickActionsState.rootEl = null;
+    inlineQuickActionsState.panelEl = null;
+    inlineQuickActionsState.statusEl = null;
+    inlineQuickActionsState.activeKind = "";
+    inlineQuickActionsState.busy = false;
+  }
+
+  function syncInlineQuickActionsForCurrentRoute() {
+    const href = String(location.href || "");
+    if (href === inlineQuickActionsState.lastUrl) return;
+    inlineQuickActionsState.lastUrl = href;
+
+    if (!isInlineQuickActionsEligiblePage()) {
+      unmountInlineQuickActions();
+      return;
+    }
+
+    mountInlineQuickActions();
+    setInlineQuickActionsStatus("");
+    void refreshInlineQuickActionsData();
+  }
+
+  function startInlineQuickActionsWatcher() {
+    if (inlineQuickActionsState.watcherTimerId) return;
+    inlineQuickActionsState.lastUrl = "";
+    syncInlineQuickActionsForCurrentRoute();
+    inlineQuickActionsState.watcherTimerId = window.setInterval(
+      syncInlineQuickActionsForCurrentRoute,
+      INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
+    );
+    document.addEventListener("pointerdown", closeInlinePanelWhenClickingOutside, true);
+  }
+
   applyHubSpotThemeFromSettingsStorage();
   subscribeHubSpotThemeChanges();
+  startInlineQuickActionsWatcher();
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || !message.type) return;
