@@ -103,15 +103,18 @@
   }
 
   function getMergedNoteTemplates() {
-    if (typeof App.getMergedNoteTemplates === "function") {
-      return App.getMergedNoteTemplates();
-    }
-    return App.normalizeNoteTemplates(state.settings.noteTemplates).map((template) => ({
+    const localSource =
+      Array.isArray(state.noteTemplatesDraft) && state.noteTemplatesDraft.length
+        ? state.noteTemplatesDraft
+        : state.settings.noteTemplates;
+    const localTemplates = App.normalizeNoteTemplates(localSource).map((template) => ({
       ...template,
       source: "local",
       readOnly: false,
       type: "NOTE"
     }));
+    const cloudTemplates = Array.isArray(state.cloud?.noteTemplates) ? state.cloud.noteTemplates : [];
+    return [...localTemplates, ...cloudTemplates];
   }
 
   function getActiveNoteTemplateDraft() {

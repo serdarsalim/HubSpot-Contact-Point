@@ -454,15 +454,18 @@
   }
 
   function getMergedEmailTemplates() {
-    if (typeof App.getMergedEmailTemplates === "function") {
-      return App.getMergedEmailTemplates();
-    }
-    return App.normalizeEmailTemplates(state.settings.emailTemplates).map((template) => ({
+    const localSource =
+      Array.isArray(state.emailTemplatesDraft) && state.emailTemplatesDraft.length
+        ? state.emailTemplatesDraft
+        : state.settings.emailTemplates;
+    const localTemplates = App.normalizeEmailTemplates(localSource).map((template) => ({
       ...template,
       source: "local",
       readOnly: false,
       type: "EMAIL"
     }));
+    const cloudTemplates = Array.isArray(state.cloud?.emailTemplates) ? state.cloud.emailTemplates : [];
+    return [...localTemplates, ...cloudTemplates];
   }
 
   function getActiveEmailTemplateDraft() {

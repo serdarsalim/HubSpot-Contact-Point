@@ -107,15 +107,18 @@
   }
 
   function getMergedWhatsappTemplates() {
-    if (typeof App.getMergedWhatsappTemplates === "function") {
-      return App.getMergedWhatsappTemplates();
-    }
-    return App.normalizeWhatsappTemplates(state.settings.whatsappTemplates).map((template) => ({
+    const localSource =
+      Array.isArray(state.whatsappTemplatesDraft) && state.whatsappTemplatesDraft.length
+        ? state.whatsappTemplatesDraft
+        : state.settings.whatsappTemplates;
+    const localTemplates = App.normalizeWhatsappTemplates(localSource).map((template) => ({
       ...template,
       source: "local",
       readOnly: false,
       type: "WHATSAPP"
     }));
+    const cloudTemplates = Array.isArray(state.cloud?.whatsappTemplates) ? state.cloud.whatsappTemplates : [];
+    return [...localTemplates, ...cloudTemplates];
   }
 
   function getActiveWhatsappTemplateDraft() {
