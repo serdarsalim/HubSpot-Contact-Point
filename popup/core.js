@@ -204,7 +204,7 @@
   };
   const DEFAULT_SETTINGS = {
     themeMode: "light",
-    defaultLaunchMode: "detached",
+    defaultLaunchMode: "attached",
     countryPrefix: "",
     messageTemplate: "",
     noteTemplate: "",

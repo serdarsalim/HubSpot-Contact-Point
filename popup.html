@@ -159,6 +159,10 @@
         margin-left: auto;
       }
 
+      html[data-launch-mode="detached"] #popOutBtn {
+        display: none;
+      }
+
       #themeToggleBtn .theme-icon {
         display: none;
       }
@@ -2507,11 +2511,6 @@
           <select id="countryPrefixInput" class="settings-country-native-select"></select>
         </div>
 
-
-        <div class="field">
-          <label for="rowFilterInput">Filter out rows containing these words (comma-separated)</label>
-          <input id="rowFilterInput" type="text" placeholder="preview, blacklist" />
-        </div>
         <div class="field">
           <div class="settings-toggle-grid">
             <label class="setting-toggle-card">
@@ -2562,6 +2561,11 @@
         </div>
 
         <div class="field">
+          <label for="rowFilterInput">Filter out rows containing these words (comma-separated)</label>
+          <input id="rowFilterInput" type="text" placeholder="preview, blacklist" />
+        </div>
+
+        <div class="field">
           <label>Local Template Data</label>
           <div class="template-data-actions">
             <button id="exportTemplatesBtn" class="btn" type="button">Export Personal Templates</button>
@@ -2570,10 +2574,6 @@
           <input id="importTemplatesInput" type="file" accept="application/json,.json" hidden />
         </div>
 
-        <div class="settings-actions">
-          <button id="cancelSettingsBtn" class="btn">Back</button>
-          <button id="saveSettingsBtn" class="btn primary">Save</button>
-        </div>
       </div>
     </section>
 

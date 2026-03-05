@@ -3,7 +3,7 @@ const DETACHED_POPUP_PATH = "popup.html?mode=detached";
 const ATTACHED_POPUP_URL = chrome.runtime.getURL(ATTACHED_POPUP_PATH);
 const DETACHED_POPUP_URL = chrome.runtime.getURL(DETACHED_POPUP_PATH);
 const SETTINGS_KEY = "popupSettings";
-const DEFAULT_LAUNCH_MODE = "detached";
+const DEFAULT_LAUNCH_MODE = "attached";
 const OPEN_POPUP_WINDOW_MESSAGE = "OPEN_POPUP_WINDOW";
 
 async function openOrFocusPopupWindow() {

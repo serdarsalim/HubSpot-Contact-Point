@@ -6,6 +6,12 @@
   let cloudPendingRows = [];
   const cloudPendingTokenDrafts = {};
   let countryDropdownBound = false;
+  let settingsAutosaveBound = false;
+  let settingsAutosaveTimerId = null;
+  let settingsAutosaveDirty = false;
+  let settingsAutosaveInFlight = false;
+  let settingsAutosaveQueued = false;
+  const SETTINGS_AUTOSAVE_DEBOUNCE_MS = 420;
   const COUNTRY_PREFIX_OPTIONS = Object.freeze([
     { name: "Afghanistan", code: "93" },
     { name: "Albania", code: "355" },
@@ -577,7 +583,91 @@
     App.updateStickyHeadOffset();
   }
 
+  async function runSettingsAutosave() {
+    if (!settingsAutosaveDirty) return;
+    if (settingsAutosaveInFlight) {
+      settingsAutosaveQueued = true;
+      return;
+    }
+    settingsAutosaveInFlight = true;
+    settingsAutosaveDirty = false;
+    try {
+      await saveSettings({ silent: true });
+    } finally {
+      settingsAutosaveInFlight = false;
+      if (settingsAutosaveQueued) {
+        settingsAutosaveQueued = false;
+        settingsAutosaveDirty = true;
+        if (settingsAutosaveTimerId) {
+          clearTimeout(settingsAutosaveTimerId);
+          settingsAutosaveTimerId = null;
+        }
+        settingsAutosaveTimerId = setTimeout(() => {
+          settingsAutosaveTimerId = null;
+          void runSettingsAutosave();
+        }, 80);
+      }
+    }
+  }
+
+  function queueSettingsAutosave(options = {}) {
+    const immediate = options?.immediate === true;
+    settingsAutosaveDirty = true;
+    if (settingsAutosaveTimerId) {
+      clearTimeout(settingsAutosaveTimerId);
+      settingsAutosaveTimerId = null;
+    }
+    settingsAutosaveTimerId = setTimeout(() => {
+      settingsAutosaveTimerId = null;
+      void runSettingsAutosave();
+    }, immediate ? 0 : SETTINGS_AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  async function flushSettingsAutosave() {
+    if (settingsAutosaveTimerId) {
+      clearTimeout(settingsAutosaveTimerId);
+      settingsAutosaveTimerId = null;
+    }
+    await runSettingsAutosave();
+  }
+
+  function bindSettingsAutosave() {
+    if (settingsAutosaveBound) return;
+    settingsAutosaveBound = true;
+    if (dom.rowFilterInput) {
+      dom.rowFilterInput.addEventListener("input", () => {
+        queueSettingsAutosave();
+      });
+      dom.rowFilterInput.addEventListener("blur", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
+    if (dom.countryPrefixInput) {
+      dom.countryPrefixInput.addEventListener("change", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
+    if (dom.defaultLaunchDetachedInput) {
+      dom.defaultLaunchDetachedInput.addEventListener("change", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
+    if (dom.inlineQuickActionsEnabledInput) {
+      dom.inlineQuickActionsEnabledInput.addEventListener("change", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
+    if (dom.columnChecks) {
+      dom.columnChecks.addEventListener("change", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
+  }
+
   function setSettingsMode(isOpen) {
+    if (!isOpen) {
+      void flushSettingsAutosave();
+    }
     if (dom.settingsPageEl) dom.settingsPageEl.hidden = !isOpen;
     syncTopLevelViewState();
   }
@@ -726,7 +816,10 @@
       const option = target.closest("[data-country-code]");
       if (!(option instanceof HTMLElement)) return;
       const code = String(option.getAttribute("data-country-code") || "").replace(/\D/g, "");
-      if (dom.countryPrefixInput) dom.countryPrefixInput.value = code;
+      if (dom.countryPrefixInput) {
+        dom.countryPrefixInput.value = code;
+        dom.countryPrefixInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       updateCountryPrefixDropdownButton();
       closeCountryPrefixDropdown();
     });
@@ -1875,7 +1968,8 @@
     await loadCloudCacheFromStorage(state.cloud.auth);
   }
 
-  async function saveSettings() {
+  async function saveSettings(options = {}) {
+    const silent = options?.silent === true;
     const next = settingsFromForm();
 
     // Only enforce this when we actually have detected columns.
@@ -1887,8 +1981,8 @@
     if (!hasVisibleDetectedColumn) {
       const message = "Enable at least one column.";
       App.setStatus(message);
-      if (typeof App.showToast === "function") App.showToast(message, 2600);
-      return;
+      if (!silent && typeof App.showToast === "function") App.showToast(message, 2600);
+      return false;
     }
 
     state.settings = { ...state.settings, ...next, messageTemplate: "", noteTemplate: "" };
@@ -1898,12 +1992,16 @@
     try {
       await persistSyncSettings(state.settings);
       App.renderContacts();
-      App.setStatus("Settings saved.");
-      if (typeof App.showToast === "function") App.showToast("Settings saved.");
+      if (!silent) {
+        App.setStatus("Settings saved.");
+        if (typeof App.showToast === "function") App.showToast("Settings saved.");
+      }
+      return true;
     } catch (error) {
       const reason = String(error?.message || error || "Unknown error.");
       App.setStatus("Could not save settings: " + reason);
-      if (typeof App.showToast === "function") App.showToast("Save failed: " + reason, 3200);
+      if (!silent && typeof App.showToast === "function") App.showToast("Save failed: " + reason, 3200);
+      return false;
     }
   }
 
@@ -1937,6 +2035,9 @@
     renderCountryPrefixOptions,
     buildSyncSettingsPayload,
     persistSyncSettings,
+    bindSettingsAutosave,
+    queueSettingsAutosave,
+    flushSettingsAutosave,
     saveEmailSettings,
     saveWhatsappSettings,
     saveNoteTemplateSettings,

@@ -14,8 +14,7 @@
   if (dom.emailSettingsBtn) dom.emailSettingsBtn.addEventListener("click", App.toggleEmailSettings);
   if (dom.whatsappSettingsBtn) dom.whatsappSettingsBtn.addEventListener("click", App.toggleWhatsappSettings);
   if (dom.noteSettingsBtn) dom.noteSettingsBtn.addEventListener("click", App.toggleNoteSettings);
-  dom.cancelSettingsBtn.addEventListener("click", App.closeSettings);
-  dom.saveSettingsBtn.addEventListener("click", App.saveSettings);
+  if (typeof App.bindSettingsAutosave === "function") App.bindSettingsAutosave();
   if (dom.addCloudAuthBtn) dom.addCloudAuthBtn.addEventListener("click", App.addCloudAuthRow);
   if (dom.cloudAuthCardsEl) {
     dom.cloudAuthCardsEl.addEventListener("click", (event) => {
