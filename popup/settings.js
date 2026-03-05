@@ -776,6 +776,9 @@
       rowFilterWord: String(dom.rowFilterInput?.value || "")
         .replace(/\s+/g, " ")
         .trim(),
+      defaultLaunchMode: App.normalizeLaunchMode(
+        dom.defaultLaunchDetachedInput?.checked ? "detached" : "attached"
+      ),
       inlineQuickActionsEnabled: dom.inlineQuickActionsEnabledInput
         ? dom.inlineQuickActionsEnabledInput.checked
         : true,
@@ -788,6 +791,9 @@
     if (dom.messageTemplateInput) dom.messageTemplateInput.value = "";
     if (dom.noteTemplateInput) dom.noteTemplateInput.value = "";
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
+    if (dom.defaultLaunchDetachedInput) {
+      dom.defaultLaunchDetachedInput.checked = App.normalizeLaunchMode(state.settings.defaultLaunchMode) === "detached";
+    }
     if (dom.inlineQuickActionsEnabledInput) {
       dom.inlineQuickActionsEnabledInput.checked = state.settings.inlineQuickActionsEnabled !== false;
     }
@@ -1819,6 +1825,7 @@
       noteTemplates
     };
     state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled !== false;
+    state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
     const migratedList = normalizeCloudAuthList(savedCloudAuthList);
     const legacyAuth = App.normalizeCloudAuth(savedCloudAuth);
     state.cloud.authList = migratedList.length ? migratedList : legacyAuth ? [legacyAuth] : [];
@@ -1886,6 +1893,7 @@
 
     state.settings = { ...state.settings, ...next, messageTemplate: "", noteTemplate: "" };
     state.settings.themeMode = App.normalizeThemeMode(state.settings.themeMode);
+    state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
 
     try {
       await persistSyncSettings(state.settings);

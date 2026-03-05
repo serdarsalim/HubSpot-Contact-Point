@@ -1,5 +1,11 @@
 (() => {
   const App = (window.PopupApp = window.PopupApp || {});
+  const urlParams = new URLSearchParams(globalThis.location?.search || "");
+  const popupLaunchMode = urlParams.get("mode") === "detached" ? "detached" : "attached";
+  const isDetachedLaunch = popupLaunchMode === "detached";
+  if (document?.documentElement) {
+    document.documentElement.setAttribute("data-launch-mode", popupLaunchMode);
+  }
   const shared = globalThis.ContactPilotShared || {};
   const MESSAGE_TYPES = shared.MESSAGE_TYPES || Object.freeze({
     GET_CONTACTS: "GET_CONTACTS",
@@ -47,6 +53,7 @@
 
     settingsBtn: document.getElementById("settingsBtn"),
     themeToggleBtn: document.getElementById("themeToggleBtn"),
+    popOutBtn: document.getElementById("popOutBtn"),
     contactViewBtn: document.getElementById("contactViewBtn"),
     activeTabBtn: document.getElementById("activeTabBtn"),
     emailSettingsBtn: document.getElementById("emailSettingsBtn"),
@@ -120,6 +127,7 @@
     messageTemplateInput: document.getElementById("messageTemplateInput"),
     noteTemplateInput: document.getElementById("noteTemplateInput"),
     rowFilterInput: document.getElementById("rowFilterInput"),
+    defaultLaunchDetachedInput: document.getElementById("defaultLaunchDetachedInput"),
     inlineQuickActionsEnabledInput: document.getElementById("inlineQuickActionsEnabledInput"),
     cloudApiBaseUrlInput: document.getElementById("cloudApiBaseUrlInput"),
     cloudAuthCardsEl: document.getElementById("cloudAuthCards"),
@@ -196,6 +204,7 @@
   };
   const DEFAULT_SETTINGS = {
     themeMode: "light",
+    defaultLaunchMode: "detached",
     countryPrefix: "",
     messageTemplate: "",
     noteTemplate: "",
@@ -496,6 +505,10 @@
     return String(value || "").toLowerCase() === "dark" ? "dark" : "light";
   }
 
+  function normalizeLaunchMode(value) {
+    return String(value || "").toLowerCase() === "detached" ? "detached" : "attached";
+  }
+
   function applyTheme(themeMode) {
     const nextMode = normalizeThemeMode(themeMode);
     state.settings.themeMode = nextMode;
@@ -516,6 +529,35 @@
     if (typeof App.persistSyncSettings === "function") {
       void App.persistSyncSettings(state.settings);
     }
+  }
+
+  function openDetachedPopupWindow() {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "OPEN_POPUP_WINDOW" }, (response) => {
+          const runtimeError = chrome.runtime.lastError;
+          if (runtimeError || !response?.ok) {
+            const errorMessage = String(runtimeError?.message || response?.error || "").trim();
+            setStatus(errorMessage ? `Could not open detached window: ${errorMessage}` : "Could not open detached window.");
+            resolve(false);
+            return;
+          }
+          if (!isDetachedLaunch) {
+            globalThis.setTimeout(() => {
+              try {
+                globalThis.close();
+              } catch (_error) {
+                // Ignore close failures.
+              }
+            }, 20);
+          }
+          resolve(true);
+        });
+      } catch (_error) {
+        setStatus("Could not open detached window.");
+        resolve(false);
+      }
+    });
   }
 
   function updateStickyHeadOffset() {
@@ -1182,8 +1224,10 @@
     templateTokenKey,
     applyTokens,
     normalizeThemeMode,
+    normalizeLaunchMode,
     applyTheme,
     toggleTheme,
+    openDetachedPopupWindow,
     updateStickyHeadOffset,
     setStatus,
     setStatusWarning,

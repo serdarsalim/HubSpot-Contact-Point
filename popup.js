@@ -4,6 +4,11 @@
 
   dom.settingsBtn.addEventListener("click", App.toggleSettings);
   if (dom.themeToggleBtn) dom.themeToggleBtn.addEventListener("click", App.toggleTheme);
+  if (dom.popOutBtn) {
+    dom.popOutBtn.addEventListener("click", () => {
+      void App.openDetachedPopupWindow();
+    });
+  }
   if (dom.contactViewBtn) dom.contactViewBtn.addEventListener("click", App.openContactsView);
   if (dom.activeTabBtn) dom.activeTabBtn.addEventListener("click", App.toggleActiveTab);
   if (dom.emailSettingsBtn) dom.emailSettingsBtn.addEventListener("click", App.toggleEmailSettings);
