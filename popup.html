@@ -37,6 +37,14 @@
         min-height: 100%;
       }
 
+      html:not([data-launch-mode="detached"]) {
+        overflow: hidden;
+      }
+
+      html:not([data-launch-mode="detached"]) body {
+        overflow: hidden;
+      }
+
       html::-webkit-scrollbar {
         width: 8px;
         height: 8px;
@@ -915,12 +923,39 @@
         width: 100%;
         max-width: 800px;
         margin: 30px auto 0;
+        box-sizing: border-box;
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 14px;
         padding: 14px;
         box-shadow: 0 8px 20px rgba(8, 30, 60, 0.08);
         overflow-y: auto;
+      }
+
+      html:not([data-launch-mode="detached"]) #mainPage {
+        flex: 1 1 auto;
+        overflow-y: auto;
+      }
+
+      html:not([data-launch-mode="detached"]) #mainPage.header-only {
+        flex: 0 0 auto;
+        overflow: visible;
+      }
+
+      html:not([data-launch-mode="detached"]) .active-tab-page {
+        overflow-y: auto;
+      }
+
+      html:not([data-launch-mode="detached"]) .settings-page {
+        overflow-y: auto;
+        padding-right: 0;
+      }
+
+      html:not([data-launch-mode="detached"]) .settings-card {
+        margin-top: 10px;
+        height: auto;
+        max-height: none;
+        overflow: visible;
       }
 
       .settings-message-note-grid {
