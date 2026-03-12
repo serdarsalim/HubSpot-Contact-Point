@@ -489,7 +489,7 @@
         vertical-align: top;
       }
 
-      td.actions .row-action-btn {
+      .row-action-btn {
         margin: 0;
         display: inline-flex;
         align-items: center;
@@ -498,7 +498,7 @@
         min-width: 22px;
       }
 
-      td.actions .row-action-btn svg {
+      .row-action-btn svg {
         width: 15px;
         height: 15px;
         stroke: currentColor;
@@ -508,12 +508,20 @@
         stroke-linejoin: round;
       }
 
-      .row-actions-wrap {
+      .name-cell-wrap {
         display: flex;
         width: 100%;
-        align-items: flex-start;
+        align-items: center;
         justify-content: flex-start;
         gap: 10px;
+        min-width: 0;
+      }
+
+      .name-leading-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
       }
 
       .row-whatsapp-btn {
@@ -563,6 +571,15 @@
 
       td.name {
         font-weight: 600;
+      }
+
+      td.name a,
+      td.name .name-link-btn {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       td.name a {

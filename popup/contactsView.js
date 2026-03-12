@@ -185,10 +185,40 @@
 
             if (App.columnType(col) === "name") {
               const contactUrl = App.buildContactUrl(recordId, state.currentPortalId);
+              const actionsHtml = `
+                <span class='name-leading-actions'>
+                  <button
+                    type='button'
+                    class='row-action-btn row-whatsapp-btn'
+                    data-key='${App.escapeHtml(key)}'
+                    aria-label='WhatsApp'
+                    title='WhatsApp'
+                  >
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <path d='M12 4c4.7 0 8.5 3.4 8.5 7.5S16.7 19 12 19c-1 0-2-.2-2.9-.5L4 20l1.4-3.8C4.5 14.9 4 13.2 4 11.5 4 7.4 7.8 4 12 4z'></path>
+                      <circle cx='9' cy='11.5' r='0.9'></circle>
+                      <circle cx='12' cy='11.5' r='0.9'></circle>
+                      <circle cx='15' cy='11.5' r='0.9'></circle>
+                    </svg>
+                  </button>
+                  <button
+                    type='button'
+                    class='row-action-btn row-email-btn'
+                    data-key='${App.escapeHtml(key)}'
+                    aria-label='Email'
+                    title='Email'
+                  >
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <rect x='3.5' y='6.5' width='17' height='11' rx='2'></rect>
+                      <path d='M4 8l8 5 8-5'></path>
+                    </svg>
+                  </button>
+                </span>
+              `;
               if (contactUrl) {
-                return `<td class='${css}'><a href='${App.escapeHtml(contactUrl)}' target='_blank' rel='noopener noreferrer'>${App.escapeHtml(value)}</a></td>`;
+                return `<td class='${css}'><span class='name-cell-wrap'>${actionsHtml}<a href='${App.escapeHtml(contactUrl)}' target='_blank' rel='noopener noreferrer'>${App.escapeHtml(value)}</a></span></td>`;
               }
-              return `<td class='${css}'><button type='button' class='name-link-btn row-missing-record-id-link' data-key='${App.escapeHtml(key)}'>${App.escapeHtml(value)}</button></td>`;
+              return `<td class='${css}'><span class='name-cell-wrap'>${actionsHtml}<button type='button' class='name-link-btn row-missing-record-id-link' data-key='${App.escapeHtml(key)}'>${App.escapeHtml(value)}</button></span></td>`;
             }
 
             return `<td class='${css}'>${App.escapeHtml(value)}</td>`;
@@ -200,41 +230,13 @@
           <td class='sel'><input type='checkbox' class='row-select' data-key='${App.escapeHtml(key)}' ${checked} /></td>
           ${cellsHtml}
           <td class='actions'>
-            <span class='row-actions-wrap'>
-              <button
-                type='button'
-                class='row-action-btn row-whatsapp-btn'
-                data-key='${App.escapeHtml(key)}'
-                aria-label='WhatsApp'
-                title='WhatsApp'
-              >
-                <svg viewBox='0 0 24 24' aria-hidden='true'>
-                  <path d='M12 4c4.7 0 8.5 3.4 8.5 7.5S16.7 19 12 19c-1 0-2-.2-2.9-.5L4 20l1.4-3.8C4.5 14.9 4 13.2 4 11.5 4 7.4 7.8 4 12 4z'></path>
-                  <circle cx='9' cy='11.5' r='0.9'></circle>
-                  <circle cx='12' cy='11.5' r='0.9'></circle>
-                  <circle cx='15' cy='11.5' r='0.9'></circle>
-                </svg>
-              </button>
-              <button
-                type='button'
-                class='row-action-btn row-email-btn'
-                data-key='${App.escapeHtml(key)}'
-                aria-label='Email'
-                title='Email'
-              >
-                <svg viewBox='0 0 24 24' aria-hidden='true'>
-                  <rect x='3.5' y='6.5' width='17' height='11' rx='2'></rect>
-                  <path d='M4 8l8 5 8-5'></path>
-                </svg>
-              </button>
-              <textarea
-                class='row-quick-note-input'
-                data-record-id='${App.escapeHtml(recordId)}'
-                aria-label='Quick note'
-                rows='1'
-                ${recordId ? "" : "disabled"}
-              >${App.escapeHtml(quickNoteValue)}</textarea>
-            </span>
+            <textarea
+              class='row-quick-note-input'
+              data-record-id='${App.escapeHtml(recordId)}'
+              aria-label='Quick note'
+              rows='1'
+              ${recordId ? "" : "disabled"}
+            >${App.escapeHtml(quickNoteValue)}</textarea>
           </td>
         </tr>
       `;
@@ -247,7 +249,7 @@
         <tr>
           <th class='sel'><input type='checkbox' id='selectAllShown' ${allShownSelected ? "checked" : ""} /></th>
           ${headerHtml}
-          <th class='actions'>ACTIONS</th>
+          <th class='actions'>QUICK NOTES</th>
         </tr>
       </thead>
       <tbody>${rowsHtml}</tbody>
