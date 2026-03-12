@@ -5,6 +5,7 @@
   let cloudPendingRowSeq = 0;
   let cloudPendingRows = [];
   const cloudPendingTokenDrafts = {};
+  const cloudAuthTokenDrafts = {};
   let countryDropdownBound = false;
   let settingsAutosaveBound = false;
   let settingsAutosaveTimerId = null;
@@ -336,9 +337,24 @@
       return;
     }
 
-    const syncedAt = formatCloudSyncLabel(state.cloud.meta);
-    const total = authList.length;
-    dom.cloudConnectionStatusEl.textContent = total + " org key" + (total === 1 ? "" : "s") + " connected (last sync: " + syncedAt + ").";
+    dom.cloudConnectionStatusEl.textContent = "";
+  }
+
+  function findConnectedCloudAuthByOrgId(organizationIdInput) {
+    const organizationId = String(organizationIdInput || "").trim();
+    if (!organizationId) return null;
+    return (state.cloud.authList || []).find((item) => item.organizationId === organizationId) || null;
+  }
+
+  function isCloudAuthTokenDirty(organizationIdInput) {
+    const organizationId = String(organizationIdInput || "").trim();
+    if (!organizationId) return false;
+    const auth = findConnectedCloudAuthByOrgId(organizationId);
+    if (!auth) return false;
+    const draftValue = Object.prototype.hasOwnProperty.call(cloudAuthTokenDrafts, organizationId)
+      ? String(cloudAuthTokenDrafts[organizationId] || "")
+      : String(auth.apiToken || "");
+    return draftValue.trim() !== String(auth.apiToken || "").trim();
   }
 
   function renderCloudAuthCards() {
@@ -347,23 +363,30 @@
     ensureDefaultPendingCloudRow();
     const authCards = (state.cloud.authList || []).map((auth) => {
       const orgName = auth.organizationName || auth.organizationSlug || auth.organizationId;
+      const currentValue = Object.prototype.hasOwnProperty.call(cloudAuthTokenDrafts, auth.organizationId)
+        ? String(cloudAuthTokenDrafts[auth.organizationId] || "")
+        : String(auth.apiToken || "");
+      const showSave = isCloudAuthTokenDirty(auth.organizationId);
+      const syncedAt = formatCloudSyncLabel(state.cloud.meta);
       return `
         <div class="cloud-auth-card" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">
           <div class="cloud-auth-card-head">
             <strong>${App.escapeHtml(orgName)}</strong>
-          </div>
-          <div class="cloud-token-row">
-            <input
-              type="password"
-              data-cloud-token-input="true"
-              data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
-              value="${App.escapeHtml(auth.apiToken)}"
-              placeholder="Paste team access key"
-              autocomplete="off"
-            />
-            <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">Update</button>
-            <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Refresh templates" title="Refresh templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
-            <button class="btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">Remove</button>
+            <div class="cloud-token-row">
+              <input
+                class="cloud-token-input"
+                type="password"
+                data-cloud-token-input="true"
+                data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
+                value="${App.escapeHtml(currentValue)}"
+                placeholder="Paste team access key"
+                autocomplete="off"
+              />
+              <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" ${showSave ? "" : "hidden"}>Save</button>
+              <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Refresh templates" title="Refresh templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
+              <button class="btn cloud-remove-btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Remove org key" title="Remove org key">X</button>
+              <span class="cloud-sync-label">Last sync: ${App.escapeHtml(syncedAt)}</span>
+            </div>
           </div>
         </div>
       `;
@@ -372,19 +395,20 @@
     const pendingCards = cloudPendingRows.map((rowId) => `
       <div class="cloud-auth-card pending" data-cloud-pending-row-id="${App.escapeHtml(rowId)}">
         <div class="cloud-auth-card-head">
-          <strong>New org key</strong>
-        </div>
-        <div class="cloud-token-row">
-          <input
-            type="password"
-            data-cloud-token-input="true"
-            data-cloud-pending-row-id="${App.escapeHtml(rowId)}"
-            value="${App.escapeHtml(cloudPendingTokenDrafts[rowId] || "")}"
-            placeholder="Paste team access key"
-            autocomplete="off"
-          />
-          <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-pending-row-id="${App.escapeHtml(rowId)}">Connect</button>
-          <button class="btn" type="button" data-cloud-remove-pending-btn="true" data-cloud-pending-row-id="${App.escapeHtml(rowId)}">Remove</button>
+          <strong>New team key</strong>
+          <div class="cloud-token-row">
+            <input
+              class="cloud-token-input"
+              type="password"
+              data-cloud-token-input="true"
+              data-cloud-pending-row-id="${App.escapeHtml(rowId)}"
+              value="${App.escapeHtml(cloudPendingTokenDrafts[rowId] || "")}"
+              placeholder="Paste team access key"
+              autocomplete="off"
+            />
+            <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-pending-row-id="${App.escapeHtml(rowId)}">Save</button>
+            <button class="btn cloud-remove-btn" type="button" data-cloud-remove-pending-btn="true" data-cloud-pending-row-id="${App.escapeHtml(rowId)}" aria-label="Remove new team key row" title="Remove new team key row">X</button>
+          </div>
         </div>
       </div>
     `);
@@ -647,11 +671,6 @@
         queueSettingsAutosave({ immediate: true });
       });
     }
-    if (dom.defaultLaunchDetachedInput) {
-      dom.defaultLaunchDetachedInput.addEventListener("change", () => {
-        queueSettingsAutosave({ immediate: true });
-      });
-    }
     if (dom.inlineQuickActionsEnabledInput) {
       dom.inlineQuickActionsEnabledInput.addEventListener("change", () => {
         queueSettingsAutosave({ immediate: true });
@@ -869,9 +888,7 @@
       rowFilterWord: String(dom.rowFilterInput?.value || "")
         .replace(/\s+/g, " ")
         .trim(),
-      defaultLaunchMode: App.normalizeLaunchMode(
-        dom.defaultLaunchDetachedInput?.checked ? "detached" : "attached"
-      ),
+      defaultLaunchMode: App.normalizeLaunchMode(state.settings.defaultLaunchMode),
       inlineQuickActionsEnabled: dom.inlineQuickActionsEnabledInput
         ? dom.inlineQuickActionsEnabledInput.checked
         : true,
@@ -884,9 +901,6 @@
     if (dom.messageTemplateInput) dom.messageTemplateInput.value = "";
     if (dom.noteTemplateInput) dom.noteTemplateInput.value = "";
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
-    if (dom.defaultLaunchDetachedInput) {
-      dom.defaultLaunchDetachedInput.checked = App.normalizeLaunchMode(state.settings.defaultLaunchMode) === "detached";
-    }
     if (dom.inlineQuickActionsEnabledInput) {
       dom.inlineQuickActionsEnabledInput.checked = state.settings.inlineQuickActionsEnabled !== false;
     }
@@ -1373,6 +1387,8 @@
       ]);
       cloudPendingRows = cloudPendingRows.filter((rowId) => rowId !== target);
       delete cloudPendingTokenDrafts[target];
+      delete cloudAuthTokenDrafts[target];
+      delete cloudAuthTokenDrafts[nextAuth.organizationId];
 
       await persistCloudAuthState();
       await loadCloudCacheFromStorage(nextAuth);
@@ -1494,9 +1510,28 @@
     if (!(target instanceof HTMLInputElement)) return;
     if (!target.hasAttribute("data-cloud-token-input")) return;
 
+    const orgId = String(target.getAttribute("data-cloud-auth-org-id") || "").trim();
     const pendingId = String(target.getAttribute("data-cloud-pending-row-id") || "").trim();
     if (pendingId) {
       cloudPendingTokenDrafts[pendingId] = String(target.value || "");
+      return;
+    }
+
+    if (!orgId) return;
+    const auth = findConnectedCloudAuthByOrgId(orgId);
+    if (!auth) return;
+    const nextValue = String(target.value || "");
+    if (nextValue.trim() === String(auth.apiToken || "").trim()) {
+      delete cloudAuthTokenDrafts[orgId];
+    } else {
+      cloudAuthTokenDrafts[orgId] = nextValue;
+    }
+
+    const row = target.closest("[data-cloud-auth-org-id]");
+    if (!(row instanceof HTMLElement)) return;
+    const saveBtn = row.querySelector("[data-cloud-connect-btn]");
+    if (saveBtn instanceof HTMLElement) {
+      saveBtn.hidden = !isCloudAuthTokenDirty(orgId);
     }
   }
 

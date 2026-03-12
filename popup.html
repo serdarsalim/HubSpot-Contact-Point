@@ -1099,6 +1099,14 @@
         color: var(--text);
       }
 
+      .record-id-required-card a {
+        color: #0b66c3;
+      }
+
+      .record-id-required-card a:hover {
+        color: #084d93;
+      }
+
       ul.record-id-required-message {
         margin: 0 0 8px 18px;
         padding: 0;
@@ -1179,6 +1187,26 @@
         margin-bottom: 12px;
       }
 
+      .settings-section {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+
+      .settings-section:first-of-type {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+      }
+
+      .settings-section-title {
+        margin: 0 0 10px;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: 0.01em;
+      }
+
       .field label {
         display: block;
         font-size: 12px;
@@ -1188,25 +1216,22 @@
 
       .settings-toggle-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
       }
 
-      .setting-toggle-card {
+      .field label.setting-toggle-card {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        justify-content: flex-start;
+        gap: 10px;
         margin-bottom: 0;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--card);
-        padding: 10px 12px;
         cursor: pointer;
       }
 
       .setting-toggle-copy {
         min-width: 0;
+        flex: 0 1 auto;
       }
 
       .setting-toggle-title {
@@ -1231,6 +1256,7 @@
         display: inline-flex;
         align-items: center;
         flex: 0 0 auto;
+        margin-left: 4px;
       }
 
       .ios-switch input {
@@ -1274,12 +1300,6 @@
       .ios-switch input:focus-visible + .ios-switch-track {
         outline: 2px solid #0b66c3;
         outline-offset: 2px;
-      }
-
-      @media (max-width: 720px) {
-        .settings-toggle-grid {
-          grid-template-columns: 1fr;
-        }
       }
 
       .field input[type="text"],
@@ -1328,9 +1348,8 @@
       }
 
       .cloud-auth-card {
-        border: 1px solid var(--line);
         border-radius: 10px;
-        padding: 8px;
+        padding: 0;
       }
 
       .cloud-auth-card.pending {
@@ -1338,22 +1357,70 @@
       }
 
       .cloud-auth-card-head {
-        display: flex;
+        display: grid;
+        grid-template-columns: 210px minmax(0, 1fr);
         align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 6px;
+        column-gap: 12px;
+        row-gap: 8px;
+        margin-bottom: 0;
+        min-width: 0;
+      }
+
+      .cloud-auth-card-head strong {
+        min-width: 0;
       }
 
       .cloud-token-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto auto;
+        display: flex;
+        justify-self: start;
+        width: 100%;
         align-items: center;
+        min-width: 0;
         gap: 8px;
       }
 
       .cloud-token-row .btn {
         white-space: nowrap;
+        flex: 0 0 auto;
+      }
+
+      .cloud-token-input {
+        flex: 0 1 360px;
+        width: 100%;
+        min-width: 180px;
+        max-width: 360px;
+        border: 1px solid #c7d7e9;
+        border-radius: 12px;
+        background: #ffffff;
+        color: var(--text);
+        padding: 10px 14px;
+      }
+
+      .cloud-token-input::placeholder {
+        color: #7f95ad;
+      }
+
+      .cloud-token-input:focus {
+        border-color: #0b66c3;
+        outline: 0;
+        box-shadow: 0 0 0 2px rgba(11, 102, 195, 0.12);
+      }
+
+      .cloud-sync-label {
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+        margin-left: auto;
+      }
+
+      .cloud-remove-btn {
+        min-width: 42px;
+        padding-inline: 0;
+        color: #c0392b;
+      }
+
+      .cloud-remove-btn:hover {
+        color: #a5281b;
       }
 
       .cloud-auth-actions {
@@ -1431,7 +1498,18 @@
       }
 
       .settings-country-field {
+        display: grid;
+        grid-template-columns: 210px minmax(0, 320px);
+        align-items: center;
+        column-gap: 12px;
         position: relative;
+      }
+
+      .settings-country-field label {
+        margin-bottom: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
       }
 
       .settings-country-native-select {
@@ -1615,7 +1693,21 @@
           grid-template-columns: 1fr;
         }
 
+        .settings-country-field {
+          grid-template-columns: 1fr;
+        }
+
+        .settings-country-field label {
+          margin-bottom: 6px;
+        }
+
+        .cloud-auth-card-head {
+          grid-template-columns: 1fr;
+          align-items: stretch;
+        }
+
         .cloud-token-row {
+          display: grid;
           grid-template-columns: 1fr;
         }
 
@@ -1637,6 +1729,23 @@
         justify-content: flex-end;
         gap: 8px;
         margin-top: 8px;
+      }
+
+      .settings-footer {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .settings-footer a {
+        color: #0b66c3;
+      }
+
+      .settings-footer a:hover {
+        color: #084d93;
       }
 
       .email-templates-page {
@@ -2150,6 +2259,49 @@
         box-shadow: 0 0 0 2px rgba(121, 167, 215, 0.18);
       }
 
+      body[data-theme="dark"] .record-id-required-card a {
+        color: #8ec5ff;
+      }
+
+      body[data-theme="dark"] .record-id-required-card a:hover {
+        color: #b7dcff;
+      }
+
+      body[data-theme="dark"] .settings-footer {
+        border-top-color: #32465f;
+        color: #9ab1cb;
+      }
+
+      body[data-theme="dark"] .settings-footer a {
+        color: #8ec5ff;
+      }
+
+      body[data-theme="dark"] .settings-footer a:hover {
+        color: #b7dcff;
+      }
+
+      body[data-theme="dark"] .cloud-remove-btn {
+        color: #ff8a80;
+      }
+
+      body[data-theme="dark"] .cloud-remove-btn:hover {
+        color: #ffb4ad;
+      }
+
+      body[data-theme="dark"] .cloud-token-input {
+        border-color: #456181;
+        background: #1a2a3e;
+        color: #d8e6f8;
+      }
+
+      body[data-theme="dark"] .cloud-token-input::placeholder {
+        color: #8ea8c5;
+      }
+
+      body[data-theme="dark"] .cloud-sync-label {
+        color: #9ab1cb;
+      }
+
       body[data-theme="dark"] .email-template-empty,
       body[data-theme="dark"] .notes-list,
       body[data-theme="dark"] .template-import-list,
@@ -2337,9 +2489,12 @@
         color: #9fb5cd;
       }
 
-      body[data-theme="dark"] .setting-toggle-card {
-        background: #1a2a3e;
-        border-color: #456181;
+      body[data-theme="dark"] .settings-country-field label {
+        color: #d8e6f8;
+      }
+
+      body[data-theme="dark"] .settings-section-title {
+        color: #d8e6f8;
       }
 
       body[data-theme="dark"] .setting-toggle-title {
@@ -2609,53 +2764,46 @@
           <h2>Settings</h2>
         </div>
 
-        <div class="field settings-country-field">
-          <label for="countryPrefixInput">Default country code</label>
-          <div id="countryPrefixDropdown" class="country-prefix-dropdown">
-            <button id="countryPrefixDropdownBtn" type="button" class="country-prefix-dropdown-btn">
-              Not set
-            </button>
-            <div id="countryPrefixDropdownPanel" class="country-prefix-dropdown-panel">
-              <input
-                id="countryPrefixDropdownSearch"
-                class="country-prefix-dropdown-search"
-                type="text"
-                placeholder="Search country or code..."
-                autocomplete="off"
-              />
-              <div id="countryPrefixDropdownList" class="country-prefix-dropdown-list"></div>
+        <section class="settings-section">
+          <h3 class="settings-section-title">General</h3>
+          <div class="field settings-country-field">
+            <label for="countryPrefixInput">Default country code</label>
+            <div id="countryPrefixDropdown" class="country-prefix-dropdown">
+              <button id="countryPrefixDropdownBtn" type="button" class="country-prefix-dropdown-btn">
+                Not set
+              </button>
+              <div id="countryPrefixDropdownPanel" class="country-prefix-dropdown-panel">
+                <input
+                  id="countryPrefixDropdownSearch"
+                  class="country-prefix-dropdown-search"
+                  type="text"
+                  placeholder="Search country or code..."
+                  autocomplete="off"
+                />
+                <div id="countryPrefixDropdownList" class="country-prefix-dropdown-list"></div>
+              </div>
+            </div>
+            <select id="countryPrefixInput" class="settings-country-native-select"></select>
+          </div>
+
+          <div class="field">
+            <div class="settings-toggle-grid">
+              <label class="setting-toggle-card">
+                <span class="setting-toggle-copy">
+                  <span class="setting-toggle-title">HubSpot contact page widget</span>
+                </span>
+                <span class="ios-switch">
+                  <input id="inlineQuickActionsEnabledInput" type="checkbox" role="switch" aria-label="Enable HubSpot contact page widget" />
+                  <span class="ios-switch-track" aria-hidden="true"></span>
+                </span>
+              </label>
             </div>
           </div>
-          <select id="countryPrefixInput" class="settings-country-native-select"></select>
-        </div>
+        </section>
 
-        <div class="field">
-          <div class="settings-toggle-grid">
-            <label class="setting-toggle-card">
-              <span class="setting-toggle-copy">
-                <span class="setting-toggle-title">Launch as new window</span>
-                <span class="setting-toggle-desc">Open Contact Point in a detached window by default</span>
-              </span>
-              <span class="ios-switch">
-                <input id="defaultLaunchDetachedInput" type="checkbox" role="switch" aria-label="Launch as new window" />
-                <span class="ios-switch-track" aria-hidden="true"></span>
-              </span>
-            </label>
-            <label class="setting-toggle-card">
-              <span class="setting-toggle-copy">
-                <span class="setting-toggle-title">HubSpot contact page widget</span>
-                <span class="setting-toggle-desc">Enable in-page quick actions (email, note, WhatsApp)</span>
-              </span>
-              <span class="ios-switch">
-                <input id="inlineQuickActionsEnabledInput" type="checkbox" role="switch" aria-label="Enable HubSpot contact page widget" />
-                <span class="ios-switch-track" aria-hidden="true"></span>
-              </span>
-            </label>
-          </div>
-        </div>
-        <div class="field">
+        <section class="settings-section">
           <div class="cloud-token-label-row">
-            <label>Team template access keys</label>
+            <h3 class="settings-section-title">Team template access keys</h3>
             <button
               id="cloudTokenInfoBtn"
               class="cloud-token-info-btn"
@@ -2671,25 +2819,37 @@
             <button id="addCloudAuthBtn" class="btn" type="button">+ Add org key</button>
           </div>
           <p id="cloudConnectionStatus" class="template-import-summary">Not connected</p>
-        </div>
+        </section>
 
-        <div class="field">
-          <label>Columns to show</label>
-          <div id="columnChecks" class="checks"></div>
-        </div>
-
-        <div class="field">
-          <label for="rowFilterInput">Filter out rows containing these words (comma-separated)</label>
-          <input id="rowFilterInput" type="text" placeholder="preview, blacklist" />
-        </div>
-
-        <div class="field">
-          <label>Local Template Data</label>
-          <div class="template-data-actions">
-            <button id="exportTemplatesBtn" class="btn" type="button">Export Personal Templates</button>
-            <button id="importTemplatesBtn" class="btn" type="button">Import Personal Templates</button>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Contacts View</h3>
+          <div class="field">
+            <label>Columns to show</label>
+            <div id="columnChecks" class="checks"></div>
           </div>
-          <input id="importTemplatesInput" type="file" accept="application/json,.json" hidden />
+
+          <div class="field">
+            <label for="rowFilterInput">Filter out rows containing these words</label>
+            <input id="rowFilterInput" type="text" placeholder="preview, blacklist" />
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3 class="settings-section-title">Data</h3>
+          <div class="field">
+            <div class="template-data-actions">
+              <button id="exportTemplatesBtn" class="btn" type="button">Export Personal Templates</button>
+              <button id="importTemplatesBtn" class="btn" type="button">Import Personal Templates</button>
+            </div>
+            <input id="importTemplatesInput" type="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+
+        <div class="settings-footer">
+          Learn more:
+          <a href="https://serdarsalim.com/contact-point" target="_blank" rel="noreferrer">serdarsalim.com/contact-point</a>
+          <br />
+          Not affiliated with HubSpot.
         </div>
 
       </div>

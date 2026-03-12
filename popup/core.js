@@ -127,7 +127,6 @@
     messageTemplateInput: document.getElementById("messageTemplateInput"),
     noteTemplateInput: document.getElementById("noteTemplateInput"),
     rowFilterInput: document.getElementById("rowFilterInput"),
-    defaultLaunchDetachedInput: document.getElementById("defaultLaunchDetachedInput"),
     inlineQuickActionsEnabledInput: document.getElementById("inlineQuickActionsEnabledInput"),
     cloudApiBaseUrlInput: document.getElementById("cloudApiBaseUrlInput"),
     cloudAuthCardsEl: document.getElementById("cloudAuthCards"),
