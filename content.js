@@ -2284,13 +2284,15 @@
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-card {
-        min-width: 228px;
-        max-width: 280px;
-        border: 1px solid #c8d5e5;
-        background: #f7fbff;
+        width: 296px;
+        min-width: 296px;
+        max-width: 296px;
+        border: 1px solid #d7c8ef;
+        background: #fcfaff;
         border-radius: 10px;
-        box-shadow: 0 6px 18px rgba(15, 40, 70, 0.18);
-        color: #29435e;
+        box-shadow: 0 10px 28px rgba(45, 22, 79, 0.16);
+        color: #47386a;
+        overflow: hidden;
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-head {
@@ -2304,12 +2306,10 @@
         padding: 9px 10px 5px;
         cursor: grab;
         user-select: none;
-        color: #153453;
-        background: linear-gradient(180deg, #dcecff 0%, #ecf5ff 62%, #f7fbff 100%);
-        border-bottom: 1px solid #c6daee;
-        box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.45);
-        border-top-left-radius: 10px;
-        border-top-right-radius: 10px;
+        color: #402a68;
+        background: #f3ebff;
+        box-shadow:
+          0 1px 0 rgba(100, 67, 154, 0.08);
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-brand-name {
@@ -2325,11 +2325,12 @@
         align-items: center;
         justify-content: center;
         gap: 6px;
-        padding: 0 10px 9px;
+        padding: 2px 10px 9px;
+        background: #f3ebff;
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-divider {
-        color: #8aa2be;
+        color: #a48dbf;
         font-size: 12px;
         line-height: 1;
       }
@@ -2343,7 +2344,7 @@
         border: 0;
         border-radius: 7px;
         background: transparent;
-        color: #2f4f6f;
+        color: #5a437d;
         cursor: pointer;
         padding: 0;
       }
@@ -2359,11 +2360,11 @@
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn:hover {
-        background: rgba(83, 136, 194, 0.14);
+        background: rgba(137, 96, 196, 0.14);
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn.active {
-        background: rgba(83, 136, 194, 0.18);
+        background: rgba(137, 96, 196, 0.2);
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID}[data-busy="1"] .cp-inline-action-btn {
@@ -2372,10 +2373,30 @@
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel {
-        border-top: 1px solid #d8e4f2;
-        padding: 8px 8px 6px;
+        border-top: 1px solid #e1d2f3;
+        padding: 5px 12px 4px 6px;
         max-height: 220px;
         overflow: auto;
+        scrollbar-gutter: stable;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(145, 113, 186, 0.52) transparent;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar {
+        width: 7px;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb {
+        background: rgba(145, 113, 186, 0.48);
+        border-radius: 999px;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb:hover {
+        background: rgba(128, 92, 173, 0.66);
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn {
@@ -2390,7 +2411,7 @@
         color: inherit;
         text-align: left;
         font-size: 12px;
-        padding: 6px 7px;
+        padding: 4px 6px;
         cursor: pointer;
       }
 
@@ -2411,7 +2432,7 @@
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-cloud {
         font-size: 12px;
         line-height: 1;
-        color: #4b6f94;
+        color: #7b63a1;
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-check {
@@ -2426,20 +2447,25 @@
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn:hover {
-        background: rgba(83, 136, 194, 0.14);
+        background: rgba(137, 96, 196, 0.12);
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-empty {
         font-size: 12px;
-        color: #6d839a;
+        color: #88759f;
         padding: 6px 7px;
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status {
-        min-height: 16px;
         font-size: 11px;
-        color: #5f7994;
+        color: #7e6a99;
         padding: 0 10px 8px;
+        display: none;
+      }
+
+      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status:not(:empty) {
+        display: block;
+        min-height: 16px;
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status[data-tone="error"] {
@@ -2451,44 +2477,56 @@
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-card {
-        background: #2a425b !important;
-        border-color: #7f9bb8 !important;
-        color: #e7f0fb !important;
-        box-shadow: 0 8px 24px rgba(4, 14, 28, 0.42) !important;
+        background: #33284a !important;
+        border-color: #8f79b6 !important;
+        color: #f2ecfb !important;
+        box-shadow: 0 8px 24px rgba(18, 8, 32, 0.42) !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-head {
-        color: #f0f6ff !important;
-        background: linear-gradient(180deg, #3a5674 0%, #2f4966 100%) !important;
-        border-bottom-color: #6f8aa8 !important;
+        color: #f7f1ff !important;
+        background: #473668 !important;
+      }
+
+      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-actions-row {
+        background: #473668 !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-divider {
-        color: #c3d6eb !important;
+        color: #cebce6 !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn {
-        color: #e3eefb !important;
+        color: #efe6fb !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn:hover {
-        background: rgba(173, 205, 238, 0.2) !important;
+        background: rgba(179, 145, 226, 0.2) !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn.active {
-        background: rgba(173, 205, 238, 0.26) !important;
+        background: rgba(179, 145, 226, 0.28) !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel {
-        border-top-color: #6f8aa8 !important;
+        border-top-color: #846bab !important;
+        scrollbar-color: rgba(198, 173, 232, 0.42) transparent;
+      }
+
+      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb {
+        background: rgba(198, 173, 232, 0.42) !important;
+      }
+
+      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb:hover {
+        background: rgba(198, 173, 232, 0.58) !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn:hover {
-        background: rgba(173, 205, 238, 0.18) !important;
+        background: rgba(179, 145, 226, 0.18) !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-cloud {
-        color: #bad4ef !important;
+        color: #d4c0f0 !important;
       }
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-check.is-used {
@@ -2497,7 +2535,7 @@
 
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-empty,
       html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status {
-        color: #d2e2f3 !important;
+        color: #dacdf0 !important;
       }
     `;
     document.documentElement.appendChild(styleEl);
@@ -2626,50 +2664,36 @@
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  function isTaskComposerDialog(dialog) {
-    if (!(dialog instanceof Element) || !isVisible(dialog)) return false;
-    const text = elementText(dialog).toLowerCase();
-    if (!text) return false;
-    if (text === "task") return true;
-    if (text.includes("create task")) return true;
-    if (text.includes("create tasks")) return true;
-    if (text.includes("enter your task")) return true;
-    if (text.includes("activity date") && text.includes("send reminder")) return true;
-    if (text.includes("task type") && text.includes("activity assigned to")) return true;
-    if (text.includes("associated with") && text.includes("create")) return true;
-    if (text.includes("task title")) return true;
-    if (text.includes("task due date")) return true;
-    if (text.includes("mark task as complete")) return true;
-    if (text.includes("reminder") && text.includes("task")) return true;
-    return false;
-  }
-
-  function isTaskComposerRoot(root) {
+  function getTaskComposerMarkerScore(root) {
     if (!(root instanceof Element) || !isVisible(root)) return false;
     const text = elementText(root).toLowerCase();
-    if (!text) return false;
+    if (!text) return 0;
 
     let score = 0;
-    if (text === "task") score += 10;
-    if (text.includes("create task")) score += 18;
-    if (text.includes("create tasks")) score += 18;
-    if (text.includes("enter your task")) score += 18;
-    if (text.includes("activity date")) score += 8;
-    if (text.includes("send reminder")) score += 8;
+    if (text.includes("enter your task")) score += 30;
+    if (text.includes("task title")) score += 26;
+    if (text.includes("activity date")) score += 10;
+    if (text.includes("send reminder")) score += 10;
     if (text.includes("set to repeat")) score += 8;
     if (text.includes("task type")) score += 8;
     if (text.includes("activity assigned to")) score += 8;
     if (text.includes("associated with")) score += 6;
-    if (text.includes("task title")) score += 18;
     if (text.includes("task due date")) score += 10;
-    if (text.includes("reminder")) score += 6;
     if (text.includes("queue")) score += 4;
-    if (text.includes("assigned to")) score += 4;
-    if (text.includes("mark task as complete")) score += 6;
-    if (root.matches("[role='dialog']")) score += 8;
-    if (root.querySelector("input, textarea, [contenteditable='true'], [role='textbox']")) score += 6;
+    if (text.includes("mark task as complete")) score += 4;
+    if (root.querySelector("textarea, input, [contenteditable='true'], [role='textbox']")) score += 4;
+    return score;
+  }
 
-    return score >= 18;
+  function isTaskComposerDialog(dialog) {
+    if (!(dialog instanceof Element) || !isVisible(dialog) || dialog.getAttribute("role") !== "dialog") return false;
+    return getTaskComposerMarkerScore(dialog) >= 28;
+  }
+
+  function isTaskComposerRoot(root) {
+    if (!(root instanceof Element) || !isVisible(root)) return false;
+    if (root.getAttribute("role") === "dialog") return isTaskComposerDialog(root);
+    return getTaskComposerMarkerScore(root) >= 36;
   }
 
   function getTaskContextText(element) {
@@ -2705,10 +2729,84 @@
     return candidateRoots.some((root) => isTaskComposerRoot(root));
   }
 
-  function findCreateTaskTrigger() {
-    const candidates = Array.from(document.querySelectorAll("button, [role='button'], a")).filter((el) => isVisible(el));
+  function findTaskComposerRoot() {
+    const dialogs = Array.from(document.querySelectorAll("[role='dialog']")).filter((dialog) => isTaskComposerDialog(dialog));
+    if (dialogs.length) return dialogs[0];
+
+    const candidateRoots = Array.from(
+      document.querySelectorAll("form, section, article, [role='region'], [data-test-id], [data-testid], [data-selenium-test]")
+    ).filter((root) => isTaskComposerRoot(root));
+    return candidateRoots[0] || null;
+  }
+
+  function scoreTaskTitleFieldCandidate(element) {
+    if (!(element instanceof Element) || !isVisible(element)) return -Infinity;
+    if (element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true") return -Infinity;
+    if (element.getAttribute("readonly") === "true") return -Infinity;
+
+    const hint = getElementHint(element);
+    const placeholder = cleanText(element.getAttribute?.("placeholder") || "").toLowerCase();
+    const text = `${hint} ${placeholder}`.trim();
+    let score = 0;
+
+    if (text.includes("enter your task")) score += 40;
+    if (text.includes("task title")) score += 34;
+    if (text === "task") score += 12;
+    if (text.includes("notes")) score -= 28;
+    if (text.includes("reminder")) score -= 20;
+    if (text.includes("queue")) score -= 18;
+    if (text.includes("assigned")) score -= 18;
+    if (text.includes("date")) score -= 20;
+
+    const tag = String(element.tagName || "").toLowerCase();
+    if (tag === "textarea") score += 8;
+    if (tag === "input") score += 6;
+    if (element.getAttribute("contenteditable") === "true") score += 10;
+
+    const rect = element.getBoundingClientRect();
+    if (rect.width >= 220) score += 4;
+    if (rect.height >= 32 && rect.height <= 96) score += 4;
+
+    return score;
+  }
+
+  function findTaskTitleField(root) {
+    if (!(root instanceof Element)) return null;
+    const candidates = Array.from(root.querySelectorAll("textarea, input, [contenteditable='true'], [role='textbox']"));
     let best = null;
     let bestScore = -Infinity;
+
+    for (const candidate of candidates) {
+      const score = scoreTaskTitleFieldCandidate(candidate);
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    return bestScore >= 16 ? best : null;
+  }
+
+  function focusTaskTitleField() {
+    const composerRoot = findTaskComposerRoot();
+    if (!(composerRoot instanceof Element)) return false;
+    const field = findTaskTitleField(composerRoot);
+    if (!(field instanceof Element)) return false;
+
+    field.focus();
+    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+      try {
+        field.setSelectionRange(field.value.length, field.value.length);
+      } catch (_error) {
+        // Ignore selection failures.
+      }
+    }
+    return true;
+  }
+
+  function getCreateTaskTriggers() {
+    const candidates = Array.from(document.querySelectorAll("button, [role='button'], a")).filter((el) => isVisible(el));
+    const matches = [];
 
     for (const el of candidates) {
       const text = elementText(el).toLowerCase();
@@ -2716,39 +2814,44 @@
       const testId = cleanText(
         el.getAttribute?.("data-test-id") || el.getAttribute?.("data-testid") || el.getAttribute?.("data-selenium-test") || ""
       ).toLowerCase();
-      const hint = `${text} ${aria} ${testId}`.trim();
-      if (!hint) continue;
+      const title = cleanText(el.getAttribute?.("title") || "").toLowerCase();
+      const hint = `${text} ${aria} ${testId} ${title}`.trim();
+      const compactHint = hint.replace(/\s+/g, " ").trim();
+      if (!compactHint) continue;
       const taskContextText = getTaskContextText(el);
       const opensTaskComposer =
-        hint.includes("create task") ||
-        hint.includes("create tasks") ||
-        hint.includes("add task") ||
-        hint.includes("new task") ||
-        hint.includes("task title") ||
-        hint.includes("to-do") ||
-        hint.includes("todo") ||
-        ((hint === "add" || hint === "+ add" || hint === "create") &&
+        compactHint.includes("create task") ||
+        compactHint.includes("create tasks") ||
+        compactHint.includes("add task") ||
+        compactHint.includes("new task") ||
+        compactHint.includes("task title") ||
+        compactHint.includes("to-do") ||
+        compactHint.includes("todo") ||
+        compactHint.includes("log task") ||
+        ((compactHint === "add" || compactHint === "+ add" || compactHint === "create" || compactHint === "+") &&
           (taskContextText.includes("tasks") || taskContextText.includes("task") || taskContextText.includes("to-do")));
       if (!opensTaskComposer) continue;
 
       let score = 0;
-      if (hint.includes("create task")) score += 40;
-      if (hint.includes("create tasks")) score += 40;
-      if (hint.includes("to-do") || hint.includes("todo")) score += 12;
-      if (hint.includes("add task")) score += 22;
-      if (hint.includes("new task")) score += 22;
-      if (hint.includes("task title")) score += 20;
-      if (hint === "add" || hint === "+ add") score += 24;
-      if (hint === "create") score += 18;
-      if (hint.includes("log")) score -= 10;
-      if (hint.includes("mark") && hint.includes("complete")) score -= 24;
-      if (hint.includes("assigned")) score -= 18;
-      if (hint.includes("filter")) score -= 22;
-      if (hint.includes("recent")) score -= 14;
+      if (compactHint.includes("create task")) score += 46;
+      if (compactHint.includes("create tasks")) score += 46;
+      if (compactHint.includes("add task")) score += 32;
+      if (compactHint.includes("new task")) score += 32;
+      if (compactHint.includes("log task")) score += 24;
+      if (compactHint.includes("task title")) score += 20;
+      if (compactHint.includes("to-do") || compactHint.includes("todo")) score += 12;
+      if (compactHint === "add" || compactHint === "+ add" || compactHint === "+") score += 26;
+      if (compactHint === "create") score += 18;
+      if (compactHint.includes("mark") && compactHint.includes("complete")) score -= 24;
+      if (compactHint.includes("assigned")) score -= 18;
+      if (compactHint.includes("filter")) score -= 22;
+      if (compactHint.includes("recent")) score -= 14;
+      if (compactHint.includes("close")) score -= 40;
 
       const classText = String(el.className || "").toLowerCase();
       if (classText.includes("private-button")) score += 3;
       if (classText.includes("primary")) score += 2;
+      if (classText.includes("add")) score += 3;
 
       const root = el.closest("[role='dialog'], [role='menu'], [role='toolbar'], [role='tablist'], section, article, li, div") || el;
       const rootText = elementText(root).toLowerCase();
@@ -2760,14 +2863,13 @@
       if (taskContextText.includes("tasks")) score += 12;
       if (taskContextText.includes("to-do") || taskContextText.includes("todo")) score += 8;
       if (taskContextText.includes("activity date")) score += 4;
+      if (taskContextText.includes("associated with")) score -= 10;
 
-      if (score > bestScore) {
-        bestScore = score;
-        best = el;
-      }
+      if (score < 14) continue;
+      matches.push({ el, score });
     }
 
-    return bestScore >= 14 ? best : null;
+    return matches.sort((a, b) => b.score - a.score).map((item) => item.el);
   }
 
   async function openTaskComposerOnPage() {
@@ -2779,14 +2881,16 @@
       if (attempt === 0 || attempt % 3 === 0) clickActivitiesTab();
       if (attempt === 1 || attempt % 3 === 1) clickTaskActivityTab();
       await sleep(180);
-      const trigger = findCreateTaskTrigger();
-      if (trigger) {
+      const triggers = getCreateTaskTriggers();
+      for (const trigger of triggers.slice(0, 4)) {
         trigger.click();
+        await sleep(180);
+        if (hasTaskComposerOpen()) {
+          focusTaskTitleField();
+          return { ok: true };
+        }
       }
-      await sleep(260);
-      if (hasTaskComposerOpen()) {
-        return { ok: true };
-      }
+      await sleep(220);
     }
 
     throw new Error("Could not open the HubSpot task composer.");
@@ -2807,15 +2911,15 @@
       if (kind === "email") {
         await applyInlineEmailTemplate(template);
         markInlineTemplateUsed("email", template.id);
-        setInlineQuickActionsStatus(`Email applied: ${template.name}`, "success");
+        setInlineQuickActionsStatus("");
       } else if (kind === "note") {
         await applyInlineNoteTemplate(template);
         markInlineTemplateUsed("note", template.id);
-        setInlineQuickActionsStatus(`Note created: ${template.name}`, "success");
+        setInlineQuickActionsStatus("");
       } else if (kind === "whatsapp") {
         applyInlineWhatsappTemplate(template);
         markInlineTemplateUsed("whatsapp", template.id);
-        setInlineQuickActionsStatus(`WhatsApp opened: ${template.name}`, "success");
+        setInlineQuickActionsStatus("");
       }
       renderInlineQuickActionsPanel("");
     } catch (error) {
