@@ -24,6 +24,7 @@
   let lastSavedDraftSignature = "";
   let formSyncReleaseTimerId = null;
   let linkDialogOutsideClickCleanup = null;
+  let draggedEmailTemplateId = "";
 
   function htmlToPlainText(value) {
     const raw = String(value || "");
@@ -47,6 +48,11 @@
 
   function templatePreviewText(template) {
     return String(template?.subject || "").trim() || htmlToPlainText(template?.body);
+  }
+
+  function renderTemplateSourceBadge(template) {
+    if (template?.source !== "cloud") return "";
+    return `<span class='template-source-pill cloud' aria-label='Cloud template' title='Cloud template'>☁</span>`;
   }
 
   function toEditorHtml(value) {
@@ -516,18 +522,69 @@
     dom.emailTemplatesListEl.innerHTML = templates
       .map((template) => {
         const activeClass = template.id === state.activeEmailTemplateId ? "active" : "";
-        const sourceClass = template.source === "cloud" ? "cloud" : "local";
-        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
+        const isLocalTemplate = template.source !== "cloud";
+        const sourceBadge = renderTemplateSourceBadge(template);
         return `
-        <button type='button' class='email-template-list-btn ${activeClass}' data-template-id='${App.escapeHtml(template.id)}'>
+        <button
+          type='button'
+          class='email-template-list-btn ${activeClass} ${isLocalTemplate ? "is-draggable" : ""}'
+          data-template-id='${App.escapeHtml(template.id)}'
+          ${isLocalTemplate ? "draggable='true'" : ""}
+        >
           <span class='email-template-list-head'>
             <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
-            <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+            ${sourceBadge}
           </span>
         </button>
       `;
       })
       .join("");
+
+    dom.emailTemplatesListEl.querySelectorAll(".email-template-list-btn.is-draggable").forEach((button) => {
+      button.addEventListener("dragstart", (event) => {
+        draggedEmailTemplateId = String(button.getAttribute("data-template-id") || "");
+        button.classList.add("is-dragging");
+        event.dataTransfer?.setData("text/plain", draggedEmailTemplateId);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      });
+
+      button.addEventListener("dragend", () => {
+        draggedEmailTemplateId = "";
+        button.classList.remove("is-dragging");
+        dom.emailTemplatesListEl
+          ?.querySelectorAll(".email-template-list-btn.drag-over")
+          .forEach((element) => element.classList.remove("drag-over"));
+      });
+
+      button.addEventListener("dragover", (event) => {
+        const targetId = String(button.getAttribute("data-template-id") || "");
+        if (!draggedEmailTemplateId || draggedEmailTemplateId === targetId) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        button.classList.add("drag-over");
+      });
+
+      button.addEventListener("dragleave", () => {
+        button.classList.remove("drag-over");
+      });
+
+      button.addEventListener("drop", (event) => {
+        const targetId = String(button.getAttribute("data-template-id") || "");
+        button.classList.remove("drag-over");
+        if (!draggedEmailTemplateId || !targetId || draggedEmailTemplateId === targetId) return;
+        event.preventDefault();
+        const fromIndex = state.emailTemplatesDraft.findIndex((template) => template.id === draggedEmailTemplateId);
+        const toIndex = state.emailTemplatesDraft.findIndex((template) => template.id === targetId);
+        if (fromIndex < 0 || toIndex < 0) return;
+        const next = [...state.emailTemplatesDraft];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        state.emailTemplatesDraft = next;
+        state.activeEmailTemplateId = moved.id;
+        renderEmailTemplatesPage();
+        scheduleEmailTemplateAutosave();
+      });
+    });
   }
 
   function renderActiveEmailTemplateEditor() {
@@ -631,14 +688,13 @@
       .map((template) => {
         const preview = templatePreviewText(template);
         const isAppliedForContact = App.hasTemplateApplied("email", state.emailTemplatePickState.key, template.id);
-        const sourceClass = template.source === "cloud" ? "cloud" : "local";
-        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
+        const sourceBadge = renderTemplateSourceBadge(template);
         return `
         <button type='button' class='email-template-pick-item' data-template-id='${App.escapeHtml(template.id)}'>
           <span class='email-template-pick-head'>
             <span class='email-template-pick-title-wrap'>
               <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
-              <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+              ${sourceBadge}
             </span>
             <span class='email-template-pick-used ${isAppliedForContact ? "is-used" : ""}' aria-hidden='true'>${isAppliedForContact ? "✓" : ""}</span>
           </span>

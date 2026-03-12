@@ -6,9 +6,15 @@
   let autosaveInFlight = false;
   let autosaveQueued = false;
   let lastSavedDraftSignature = "";
+  let draggedWhatsappTemplateId = "";
 
   function templatePreviewText(template) {
     return String(template?.body || "").trim();
+  }
+
+  function renderTemplateSourceBadge(template) {
+    if (template?.source !== "cloud") return "";
+    return `<span class='template-source-pill cloud' aria-label='Cloud template' title='Cloud template'>☁</span>`;
   }
 
   function setWhatsappTemplateSaveState(stateKey, text) {
@@ -163,18 +169,69 @@
     dom.whatsappTemplatesListEl.innerHTML = templates
       .map((template) => {
         const activeClass = template.id === state.activeWhatsappTemplateId ? "active" : "";
-        const sourceClass = template.source === "cloud" ? "cloud" : "local";
-        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
+        const isLocalTemplate = template.source !== "cloud";
+        const sourceBadge = renderTemplateSourceBadge(template);
         return `
-        <button type='button' class='email-template-list-btn ${activeClass}' data-template-id='${App.escapeHtml(template.id)}'>
+        <button
+          type='button'
+          class='email-template-list-btn ${activeClass} ${isLocalTemplate ? "is-draggable" : ""}'
+          data-template-id='${App.escapeHtml(template.id)}'
+          ${isLocalTemplate ? "draggable='true'" : ""}
+        >
           <span class='email-template-list-head'>
             <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
-            <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+            ${sourceBadge}
           </span>
         </button>
       `;
       })
       .join("");
+
+    dom.whatsappTemplatesListEl.querySelectorAll(".email-template-list-btn.is-draggable").forEach((button) => {
+      button.addEventListener("dragstart", (event) => {
+        draggedWhatsappTemplateId = String(button.getAttribute("data-template-id") || "");
+        button.classList.add("is-dragging");
+        event.dataTransfer?.setData("text/plain", draggedWhatsappTemplateId);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      });
+
+      button.addEventListener("dragend", () => {
+        draggedWhatsappTemplateId = "";
+        button.classList.remove("is-dragging");
+        dom.whatsappTemplatesListEl
+          ?.querySelectorAll(".email-template-list-btn.drag-over")
+          .forEach((element) => element.classList.remove("drag-over"));
+      });
+
+      button.addEventListener("dragover", (event) => {
+        const targetId = String(button.getAttribute("data-template-id") || "");
+        if (!draggedWhatsappTemplateId || draggedWhatsappTemplateId === targetId) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        button.classList.add("drag-over");
+      });
+
+      button.addEventListener("dragleave", () => {
+        button.classList.remove("drag-over");
+      });
+
+      button.addEventListener("drop", (event) => {
+        const targetId = String(button.getAttribute("data-template-id") || "");
+        button.classList.remove("drag-over");
+        if (!draggedWhatsappTemplateId || !targetId || draggedWhatsappTemplateId === targetId) return;
+        event.preventDefault();
+        const fromIndex = state.whatsappTemplatesDraft.findIndex((template) => template.id === draggedWhatsappTemplateId);
+        const toIndex = state.whatsappTemplatesDraft.findIndex((template) => template.id === targetId);
+        if (fromIndex < 0 || toIndex < 0) return;
+        const next = [...state.whatsappTemplatesDraft];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        state.whatsappTemplatesDraft = next;
+        state.activeWhatsappTemplateId = moved.id;
+        renderWhatsappTemplatesPage();
+        scheduleWhatsappTemplateAutosave();
+      });
+    });
   }
 
   function renderActiveWhatsappTemplateEditor() {
@@ -274,14 +331,13 @@
       .map((template) => {
         const preview = templatePreviewText(template);
         const isAppliedForContact = App.hasTemplateApplied("whatsapp", state.whatsappTemplatePickState.key, template.id);
-        const sourceClass = template.source === "cloud" ? "cloud" : "local";
-        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
+        const sourceBadge = renderTemplateSourceBadge(template);
         return `
         <button type='button' class='email-template-pick-item' data-template-id='${App.escapeHtml(template.id)}'>
           <span class='email-template-pick-head'>
             <span class='email-template-pick-title-wrap'>
               <span class='email-template-pick-name'>${App.escapeHtml(template.name || "Untitled")}</span>
-              <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+              ${sourceBadge}
             </span>
             <span class='email-template-pick-used ${isAppliedForContact ? "is-used" : ""}' aria-hidden='true'>${isAppliedForContact ? "✓" : ""}</span>
           </span>

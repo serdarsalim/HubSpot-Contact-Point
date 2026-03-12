@@ -6,6 +6,12 @@
   let autosaveInFlight = false;
   let autosaveQueued = false;
   let lastSavedDraftSignature = "";
+  let draggedNoteTemplateId = "";
+
+  function renderTemplateSourceBadge(template) {
+    if (template?.source !== "cloud") return "";
+    return `<span class='template-source-pill cloud' aria-label='Cloud template' title='Cloud template'>☁</span>`;
+  }
 
   function setNoteTemplateSaveState(stateKey, text) {
     if (!dom.noteTemplateSaveStateEl) return;
@@ -159,18 +165,69 @@
     dom.noteTemplatesListEl.innerHTML = templates
       .map((template) => {
         const activeClass = template.id === state.activeNoteTemplateId ? "active" : "";
-        const sourceClass = template.source === "cloud" ? "cloud" : "local";
-        const sourceLabel = template.source === "cloud" ? "Cloud" : "Local";
+        const isLocalTemplate = template.source !== "cloud";
+        const sourceBadge = renderTemplateSourceBadge(template);
         return `
-        <button type='button' class='email-template-list-btn ${activeClass}' data-template-id='${App.escapeHtml(template.id)}'>
+        <button
+          type='button'
+          class='email-template-list-btn ${activeClass} ${isLocalTemplate ? "is-draggable" : ""}'
+          data-template-id='${App.escapeHtml(template.id)}'
+          ${isLocalTemplate ? "draggable='true'" : ""}
+        >
           <span class='email-template-list-head'>
             <span class='email-template-list-name'>${App.escapeHtml(template.name || "Untitled")}</span>
-            <span class='template-source-pill ${sourceClass}'>${sourceLabel}</span>
+            ${sourceBadge}
           </span>
         </button>
       `;
       })
       .join("");
+
+    dom.noteTemplatesListEl.querySelectorAll(".email-template-list-btn.is-draggable").forEach((button) => {
+      button.addEventListener("dragstart", (event) => {
+        draggedNoteTemplateId = String(button.getAttribute("data-template-id") || "");
+        button.classList.add("is-dragging");
+        event.dataTransfer?.setData("text/plain", draggedNoteTemplateId);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      });
+
+      button.addEventListener("dragend", () => {
+        draggedNoteTemplateId = "";
+        button.classList.remove("is-dragging");
+        dom.noteTemplatesListEl
+          ?.querySelectorAll(".email-template-list-btn.drag-over")
+          .forEach((element) => element.classList.remove("drag-over"));
+      });
+
+      button.addEventListener("dragover", (event) => {
+        const targetId = String(button.getAttribute("data-template-id") || "");
+        if (!draggedNoteTemplateId || draggedNoteTemplateId === targetId) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        button.classList.add("drag-over");
+      });
+
+      button.addEventListener("dragleave", () => {
+        button.classList.remove("drag-over");
+      });
+
+      button.addEventListener("drop", (event) => {
+        const targetId = String(button.getAttribute("data-template-id") || "");
+        button.classList.remove("drag-over");
+        if (!draggedNoteTemplateId || !targetId || draggedNoteTemplateId === targetId) return;
+        event.preventDefault();
+        const fromIndex = state.noteTemplatesDraft.findIndex((template) => template.id === draggedNoteTemplateId);
+        const toIndex = state.noteTemplatesDraft.findIndex((template) => template.id === targetId);
+        if (fromIndex < 0 || toIndex < 0) return;
+        const next = [...state.noteTemplatesDraft];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        state.noteTemplatesDraft = next;
+        state.activeNoteTemplateId = moved.id;
+        renderNoteTemplatesPage();
+        scheduleNoteTemplateAutosave();
+      });
+    });
   }
 
   function renderActiveNoteTemplateEditor() {
@@ -252,7 +309,7 @@
     const options = ["<option value=''>Custom note</option>"];
     for (const template of templates) {
       const isSelected = template.id === selected ? "selected" : "";
-      const suffix = template.source === "cloud" ? " (Cloud)" : "";
+      const suffix = template.source === "cloud" ? " ☁" : "";
       options.push(
         `<option value='${App.escapeHtml(template.id)}' ${isSelected}>${App.escapeHtml(template.name || "Untitled")}${suffix}</option>`
       );

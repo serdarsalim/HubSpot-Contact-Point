@@ -3063,13 +3063,13 @@
       <div class='cp-inline-card'>
         <div class='cp-inline-head'><span class='cp-inline-brand-name'>Contact Point</span></div>
         <div class='cp-inline-actions-row'>
+          <button type='button' class='cp-inline-action-btn' data-kind='whatsapp' aria-label='WhatsApp templates' title='WhatsApp templates'>${inlineActionIcon("whatsapp")}</button>
+          <span class='cp-inline-divider'>|</span>
           <button type='button' class='cp-inline-action-btn' data-kind='email' aria-label='Email templates' title='Email templates'>${inlineActionIcon("email")}</button>
           <span class='cp-inline-divider'>|</span>
           <button type='button' class='cp-inline-action-btn' data-kind='note' aria-label='Note templates' title='Note templates'>${inlineActionIcon("note")}</button>
           <span class='cp-inline-divider'>|</span>
           <button type='button' class='cp-inline-action-btn' data-kind='task' aria-label='Create task' title='Create task'>${inlineActionIcon("task")}</button>
-          <span class='cp-inline-divider'>|</span>
-          <button type='button' class='cp-inline-action-btn' data-kind='whatsapp' aria-label='WhatsApp templates' title='WhatsApp templates'>${inlineActionIcon("whatsapp")}</button>
         </div>
         <div class='cp-inline-panel' hidden></div>
         <div class='cp-inline-status' aria-live='polite'></div>

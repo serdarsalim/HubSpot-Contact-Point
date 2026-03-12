@@ -1717,6 +1717,25 @@
         overflow-y: auto;
         flex: 1;
         min-height: 0;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(118, 146, 178, 0.48) transparent;
+      }
+
+      .email-templates-list::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .email-templates-list::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .email-templates-list::-webkit-scrollbar-thumb {
+        background: rgba(118, 146, 178, 0.44);
+        border-radius: 999px;
+      }
+
+      .email-templates-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(97, 126, 159, 0.62);
       }
 
       .email-template-list-btn {
@@ -1743,6 +1762,20 @@
         border-color: #b9d1ea;
       }
 
+      .email-template-list-btn.is-draggable {
+        cursor: grab;
+      }
+
+      .email-template-list-btn.is-dragging {
+        opacity: 0.56;
+        cursor: grabbing;
+      }
+
+      .email-template-list-btn.drag-over {
+        border-color: #8cb3dd;
+        box-shadow: 0 0 0 2px rgba(71, 126, 192, 0.18);
+      }
+
       .email-template-list-name {
         display: block;
         font-size: 13px;
@@ -1759,21 +1792,15 @@
       .template-source-pill {
         display: inline-flex;
         align-items: center;
-        border-radius: 999px;
-        padding: 2px 7px;
-        font-size: 11px;
+        justify-content: center;
+        min-width: 16px;
+        font-size: 13px;
         font-weight: 700;
-        letter-spacing: 0.02em;
+        line-height: 1;
       }
 
       .template-source-pill.cloud {
-        background: #dbeafe;
-        color: #1e3a8a;
-      }
-
-      .template-source-pill.local {
-        background: #dcfce7;
-        color: #166534;
+        color: #2563eb;
       }
 
       .email-template-list-btn.active .email-template-list-name {
@@ -2118,6 +2145,11 @@
         border-color: #527399;
       }
 
+      body[data-theme="dark"] .email-template-list-btn.drag-over {
+        border-color: #79a7d7;
+        box-shadow: 0 0 0 2px rgba(121, 167, 215, 0.18);
+      }
+
       body[data-theme="dark"] .email-template-empty,
       body[data-theme="dark"] .notes-list,
       body[data-theme="dark"] .template-import-list,
@@ -2196,7 +2228,6 @@
       }
 
       body[data-theme="dark"] .template-source-pill.cloud {
-        background: #233754;
         color: #9ac1f8;
       }
 
@@ -2211,9 +2242,16 @@
         color: #e6f1ff;
       }
 
-      body[data-theme="dark"] .template-source-pill.local {
-        background: #1f3a31;
-        color: #9de5bd;
+      body[data-theme="dark"] .email-templates-list {
+        scrollbar-color: rgba(149, 175, 204, 0.44) transparent;
+      }
+
+      body[data-theme="dark"] .email-templates-list::-webkit-scrollbar-thumb {
+        background: rgba(149, 175, 204, 0.4);
+      }
+
+      body[data-theme="dark"] .email-templates-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(149, 175, 204, 0.56);
       }
 
       body[data-theme="dark"] .template-readonly-note {
