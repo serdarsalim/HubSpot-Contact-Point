@@ -176,6 +176,8 @@
   const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
   const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
   const CLOUD_ACTIVE_ORG_ID_LOCAL_KEY = "popupCloudActiveOrganizationId";
+  const HUBSPOT_URL_PATTERNS = Object.freeze(["https://*.hubspot.com/*"]);
+  const HUBSPOT_FALLBACK_ORIGIN = "https://app.hubspot.com";
   const CLOUD_EMAIL_CACHE_PREFIX = "popupCloudEmailTemplates::";
   const CLOUD_WHATSAPP_CACHE_PREFIX = "popupCloudWhatsappTemplates::";
   const CLOUD_NOTE_CACHE_PREFIX = "popupCloudNoteTemplates::";
@@ -225,6 +227,7 @@
     selectedKeys: new Set(),
     sortState: { field: null, direction: "asc" },
     currentPortalId: "",
+    currentHubSpotOrigin: HUBSPOT_FALLBACK_ORIGIN,
     notesDialogState: {
       recordId: "",
       contactName: "",
@@ -746,10 +749,12 @@
   }
 
   function getRecordIdForContact(contact) {
+    const fromContact = String(contact?.recordId || "").replace(/\D/g, "");
+    if (fromContact) return fromContact;
     const recordIdColumn = findRecordIdColumn();
     const fromValues = recordIdColumn ? String(contact?.values?.[recordIdColumn.id] || "").replace(/\D/g, "") : "";
     if (fromValues) return fromValues;
-    return String(contact?.recordId || contact?.values?.record_id || "").replace(/\D/g, "");
+    return String(contact?.values?.record_id || "").replace(/\D/g, "");
   }
 
   function getFirstNameFromContact(contact) {
@@ -765,11 +770,41 @@
     };
   }
 
-  function buildContactUrl(recordId, portalId) {
+  function isHubSpotHostname(hostname) {
+    const host = String(hostname || "").trim().toLowerCase();
+    return host === "hubspot.com" || host.endsWith(".hubspot.com");
+  }
+
+  function parseHubSpotUrl(url) {
+    try {
+      return new URL(String(url || ""));
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function isHubSpotUrl(url) {
+    const parsed = parseHubSpotUrl(url);
+    return parsed?.protocol === "https:" && isHubSpotHostname(parsed.hostname);
+  }
+
+  function getHubSpotOrigin(urlOrOrigin) {
+    const parsed = parseHubSpotUrl(urlOrOrigin);
+    if (parsed?.protocol === "https:" && isHubSpotHostname(parsed.hostname)) {
+      return parsed.origin;
+    }
+    return HUBSPOT_FALLBACK_ORIGIN;
+  }
+
+  function buildHubSpotContactUrl(recordId, portalId, origin = state.currentHubSpotOrigin) {
     const cleanRecordId = String(recordId || "").replace(/\D/g, "");
     const cleanPortalId = String(portalId || "").replace(/\D/g, "");
     if (!cleanRecordId || !cleanPortalId) return "";
-    return `https://app.hubspot.com/contacts/${cleanPortalId}/record/0-1/${cleanRecordId}`;
+    return `${getHubSpotOrigin(origin)}/contacts/${cleanPortalId}/record/0-1/${cleanRecordId}`;
+  }
+
+  function buildContactUrl(recordId, portalId) {
+    return buildHubSpotContactUrl(recordId, portalId, state.currentHubSpotOrigin);
   }
 
   function getSelectedContacts() {
@@ -963,7 +998,7 @@
   function openRecordIdRequiredDialog() {
     if (dom.recordIdRequiredMessageEl) {
       dom.recordIdRequiredMessageEl.textContent =
-        'Missing "Record ID" column. In HubSpot Contacts list view (not an individual contact page), add it to table columns, then refresh Contact Point.';
+        "This row does not expose a HubSpot contact record link, so Contact Point cannot open the exact contact from it.";
     }
     if (dom.recordIdRequiredOverlay) {
       dom.recordIdRequiredOverlay.classList.add("open");
@@ -1184,6 +1219,8 @@
     CLOUD_AUTH_LOCAL_KEY,
     CLOUD_AUTH_LIST_LOCAL_KEY,
     CLOUD_ACTIVE_ORG_ID_LOCAL_KEY,
+    HUBSPOT_URL_PATTERNS,
+    HUBSPOT_FALLBACK_ORIGIN,
     CLOUD_EMAIL_CACHE_PREFIX,
     CLOUD_WHATSAPP_CACHE_PREFIX,
     CLOUD_NOTE_CACHE_PREFIX,
@@ -1250,6 +1287,10 @@
     getRecordIdForContact,
     getFirstNameFromContact,
     getContactTokenMap,
+    isHubSpotHostname,
+    isHubSpotUrl,
+    getHubSpotOrigin,
+    buildHubSpotContactUrl,
     buildContactUrl,
     getSelectedContacts,
     normalizeTemplateUsageMap,

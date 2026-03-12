@@ -2,9 +2,10 @@
   const App = window.PopupApp;
   const MT = App.messageTypes;
   const timing = App.timing.popup;
+  const hubSpotUrlPatterns = App.constants.HUBSPOT_URL_PATTERNS || ["https://*.hubspot.com/*"];
 
   async function findHubSpotTab() {
-    const tabs = await chrome.tabs.query({ url: ["https://app.hubspot.com/*"] });
+    const tabs = await chrome.tabs.query({ url: hubSpotUrlPatterns });
     if (!tabs.length) return null;
 
     const sorted = [...tabs].sort((a, b) => {
@@ -32,13 +33,9 @@
     return Number(b?.id || 0) - Number(a?.id || 0);
   }
 
-  function isHubSpotUrl(url) {
-    return /^https:\/\/app\.hubspot\.com\//i.test(String(url || ""));
-  }
-
   async function findActiveHubSpotTab() {
     const activeTabs = await chrome.tabs.query({ active: true });
-    const candidates = activeTabs.filter((tab) => isHubSpotUrl(tab?.url || ""));
+    const candidates = activeTabs.filter((tab) => App.isHubSpotUrl(tab?.url || ""));
     if (!candidates.length) return null;
     candidates.sort(compareTabsByRecency);
     return candidates[0] || null;
@@ -66,11 +63,11 @@
 
   async function findBestContactsTab({ countryPrefix = "", messageText = "" } = {}) {
     const activeTab = await findActiveHubSpotTab();
-    const hubSpotTabs = await chrome.tabs.query({ url: ["https://app.hubspot.com/*"] });
+    const hubSpotTabs = await chrome.tabs.query({ url: hubSpotUrlPatterns });
     if (!hubSpotTabs.length) return null;
 
     const orderedCandidates = [];
-    if (activeTab && typeof activeTab.id === "number" && /^https:\/\/app\.hubspot\.com\//i.test(String(activeTab.url || ""))) {
+    if (activeTab && typeof activeTab.id === "number" && App.isHubSpotUrl(activeTab?.url || "")) {
       orderedCandidates.push(activeTab);
     }
 
@@ -95,7 +92,7 @@
 
   async function findBestContactRecordTab() {
     const activeTab = await findActiveHubSpotTab();
-    const hubSpotTabs = await chrome.tabs.query({ url: ["https://app.hubspot.com/*"] });
+    const hubSpotTabs = await chrome.tabs.query({ url: hubSpotUrlPatterns });
     if (!hubSpotTabs.length) return null;
 
     if (activeTab && typeof activeTab.id === "number" && isContactRecordTab(activeTab)) {
@@ -206,7 +203,7 @@
     const cleanPortalId = String(portalId || "").replace(/\D/g, "");
     if (!cleanId) return null;
 
-    const tabs = await chrome.tabs.query({ url: ["https://app.hubspot.com/*"] });
+    const tabs = await chrome.tabs.query({ url: hubSpotUrlPatterns });
     const matchingTabs = tabs.filter((tab) => {
       const tabRecordId = extractContactRecordIdFromUrl(tab?.url || "");
       if (tabRecordId !== cleanId) return false;
@@ -231,6 +228,19 @@
       throw new Error("Invalid Record ID.");
     }
 
+    const resolveHubSpotOrigin = async () => {
+      const existingTab = await findExistingContactTab(cleanId, portalId);
+      if (existingTab?.url) return App.getHubSpotOrigin(existingTab.url);
+
+      const activeHubSpotTab = await findActiveHubSpotTab();
+      if (activeHubSpotTab?.url) return App.getHubSpotOrigin(activeHubSpotTab.url);
+
+      const fallbackHubSpotTab = await findHubSpotTab();
+      if (fallbackHubSpotTab?.url) return App.getHubSpotOrigin(fallbackHubSpotTab.url);
+
+      return App.getHubSpotOrigin(App.state?.currentHubSpotOrigin || "");
+    };
+
     const openFreshContactTabAndWork = async () => {
       if (!allowOpenFresh) {
         throw new Error("Open the contact tab and try again.");
@@ -238,7 +248,7 @@
       if (!portalId) {
         throw new Error("Could not detect HubSpot portal ID for this contact.");
       }
-      const url = `https://app.hubspot.com/contacts/${portalId}/record/0-1/${cleanId}?interaction=note`;
+      const url = `${App.buildHubSpotContactUrl(cleanId, portalId, await resolveHubSpotOrigin())}?interaction=note`;
       const openedTab = await chrome.tabs.create({ url, active: false });
       if (!openedTab || typeof openedTab.id !== "number") {
         throw new Error("Could not open HubSpot contact tab.");

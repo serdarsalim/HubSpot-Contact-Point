@@ -274,6 +274,7 @@
       if (portalId) {
         state.currentPortalId = portalId;
       }
+      state.currentHubSpotOrigin = App.getHubSpotOrigin(tab.url || "");
 
       renderActiveTabContext();
       if (kind === "contact") {
@@ -316,6 +317,7 @@
       if (portalId) {
         state.currentPortalId = portalId;
       }
+      state.currentHubSpotOrigin = App.getHubSpotOrigin(tab.url || "");
       renderActiveTabContext();
       if (kind === "contact" && recordId) {
         setActiveTabStatus("Loaded contact from URL fallback only. Refresh the contact tab and click Refresh.");

@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Contact Point",
-  "version": "2026.3.4",
+  "version": "2026.3.5",
   "description": "Contact workflow sidecar with WhatsApp links, notes, and email templates.",
   "permissions": [
     "storage",
     "tabs"
   ],
   "host_permissions": [
+    "https://*.hubspot.com/*",
     "https://us.i.posthog.com/*",
     "https://contactpoint.vercel.app/*",
     "http://localhost/*",
@@ -34,7 +35,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://app.hubspot.com/*"
+        "https://*.hubspot.com/*"
       ],
       "js": [
         "shared/messages.js",

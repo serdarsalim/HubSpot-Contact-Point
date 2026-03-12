@@ -1,11 +1,6 @@
 (() => {
   const App = window.PopupApp;
   const { dom, state } = App;
-  const RECORD_ID_COLUMN_PATTERN = /^(record_id|recordid|hs_object_id|hs_objectid)$/i;
-
-  function findRecordIdColumn(columns) {
-    return columns.find((col) => /record\s*id/i.test(col.label) || RECORD_ID_COLUMN_PATTERN.test(col.id)) || null;
-  }
 
   function updateRecordIdColumnWarning(columns = state.currentColumns) {
     if (typeof App.setStatusWarning !== "function") return;
@@ -14,24 +9,21 @@
       App.setStatusWarning("");
       return;
     }
-    const hasRecordIdColumn = !!findRecordIdColumn(sourceColumns);
-    App.setStatusWarning(hasRecordIdColumn ? "" : "Record ID column missing. Required to match the correct contact.");
+    const missingLinkedRecordId = sourceColumns.length
+      ? state.currentContacts.some((contact) => !String(contact?.recordId || "").replace(/\D/g, ""))
+      : false;
+    App.setStatusWarning(missingLinkedRecordId ? "Some rows do not expose a contact link, so contact-specific actions may be unavailable for those rows." : "");
   }
 
   function dedupeContactsByRecordId(contacts, columns) {
     const source = Array.isArray(contacts) ? contacts : [];
     if (!source.length) return [];
 
-    const recordIdColumn = findRecordIdColumn(Array.isArray(columns) ? columns : []);
-    if (!recordIdColumn) {
-      return source;
-    }
-
     const seenRecordIds = new Set();
     const deduped = [];
 
     for (const contact of source) {
-      const recordId = String(contact?.values?.[recordIdColumn.id] || contact?.recordId || "").replace(/\D/g, "");
+      const recordId = App.getRecordIdForContact(contact);
       if (!recordId) {
         deduped.push(contact);
         continue;
@@ -296,7 +288,7 @@
         const recordId = App.getRecordIdForContact(contact);
         if (!recordId) {
           App.openRecordIdRequiredDialog();
-          App.setStatus('Missing "Record ID" column. Add it in HubSpot Contacts list columns, then refresh Contact Point.');
+          App.setStatus("Could not detect this contact's HubSpot record link from the current row.");
           return;
         }
 
@@ -317,7 +309,7 @@
     dom.listEl.querySelectorAll(".row-missing-record-id-link").forEach((button) => {
       button.addEventListener("click", () => {
         App.openRecordIdRequiredDialog();
-        App.setStatus('Missing "Record ID" column. Add it in HubSpot Contacts list columns, then refresh Contact Point.');
+        App.setStatus("Could not detect this contact's HubSpot record link from the current row.");
       });
     });
 
@@ -407,7 +399,7 @@
       const tab = resolved?.tab || null;
       if (!tab || typeof tab.id !== "number") {
         App.setStatusWarning("");
-        App.setStatus("Open a HubSpot contacts table tab (app.hubspot.com), refresh it, and try again.");
+        App.setStatus("Open a HubSpot contacts table tab on any HubSpot app domain, refresh it, and try again.");
         return;
       }
 
@@ -425,7 +417,7 @@
 
       if (!App.isValidContactsPayload(response)) {
         App.setStatusWarning("");
-        App.setStatus("Open a HubSpot contacts table tab (app.hubspot.com), refresh it, and try again.");
+        App.setStatus("Open a HubSpot contacts table tab on any HubSpot app domain, refresh it, and try again.");
         return;
       }
 
@@ -434,6 +426,7 @@
       state.currentContacts = filterOutEmptyContacts(dedupedContacts, state.currentColumns);
       state.phoneColumnId = response.phoneColumnId || null;
       state.currentPortalId = (await App.getPortalId(tab)) || "";
+      state.currentHubSpotOrigin = App.getHubSpotOrigin(tab.url || "");
 
       const settingsChanged = App.mergeColumnSettings();
       if (settingsChanged) {
