@@ -85,7 +85,7 @@
       #mainPage {
         display: flex;
         flex-direction: column;
-        flex: 0 0 auto;
+        flex: 1 1 auto;
         min-height: 0;
         width: 100%;
       }
@@ -112,9 +112,7 @@
       }
 
       .sticky-head {
-        position: sticky;
-        top: 0;
-        z-index: 20;
+        flex: 0 0 auto;
         padding-top: 8px;
         background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
       }
@@ -374,16 +372,32 @@
       }
 
       .list {
-        overflow: visible;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 12px;
+        scrollbar-width: thin;
+        scrollbar-color: #a6bacf transparent;
+      }
+
+      .list::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      .list::-webkit-scrollbar-thumb {
+        background: #a6bacf;
+        border-radius: 999px;
+      }
+
+      .list::-webkit-scrollbar-track {
+        background: transparent;
       }
 
       .contacts-bottom-spacer {
-        height: 200px;
-        width: 100%;
-        background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+        display: none;
       }
 
       table {
@@ -416,7 +430,7 @@
         color: #24476d;
         font-weight: 700;
         position: sticky;
-        top: var(--sticky-head-h);
+        top: 0;
         z-index: 2;
         height: 56px;
         box-sizing: border-box;
@@ -485,7 +499,7 @@
 
       th.actions {
         position: sticky;
-        top: var(--sticky-head-h);
+        top: 0;
         z-index: 2;
         background: #eef4fb;
       }
