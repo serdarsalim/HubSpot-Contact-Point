@@ -40,6 +40,18 @@ A Chrome extension for HubSpot contact workflows with fast template-driven outre
   - WhatsApp templates (`popupWhatsappTemplates`)
   - Note templates (`popupNoteTemplates`)
 
+## Template Tokens
+
+Templates support simple contact tokens:
+
+- `[name]`: first name when available
+- `[gender]`: gender/salutation value when available
+
+Notes:
+
+- `[gender]` is best-effort. It resolves only when that field is available in the current contact data/context.
+- The extension does not open a contact page just to resolve `[gender]`; if unavailable, it resolves to blank.
+
 ## Notes
 
 - The extension uses HubSpot DOM automation heuristics. If HubSpot changes UI structure, automation selectors may need updates.
