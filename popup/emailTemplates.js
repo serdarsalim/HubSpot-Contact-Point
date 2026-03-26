@@ -762,21 +762,26 @@
     App.setStatus(`Opening ${App.getContactDisplayName(contact)} and applying "${template.name}"...`);
 
     try {
-      const tab = await chrome.tabs.create({ url: contactUrl, active: true });
-      if (!tab || typeof tab.id !== "number") {
-        App.setStatus("Could not open HubSpot contact tab.");
+      const portalId = await App.resolvePortalIdForRecord(recordId);
+      if (!portalId) {
+        App.setStatus("Could not detect HubSpot portal ID for this contact.");
         return;
       }
 
-      await App.waitForTabComplete(tab.id);
-      await App.sleep(timing.emailComposerReadyDelayMs);
-
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        type: MT.OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE,
-        subject,
-        body,
-        bodyHtml
-      });
+      const response = await App.withContactTab(
+        recordId,
+        portalId,
+        async (tabId) => {
+          await App.sleep(timing.emailComposerReadyDelayMs);
+          return chrome.tabs.sendMessage(tabId, {
+            type: MT.OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE,
+            subject,
+            body,
+            bodyHtml
+          });
+        },
+        { allowOpenFresh: true }
+      );
 
       if (!response?.ok) {
         App.setStatus(response?.error || "Opened contact, but could not apply email template.");

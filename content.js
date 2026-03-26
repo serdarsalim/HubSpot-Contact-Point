@@ -1054,18 +1054,110 @@
     return candidates[0] || "";
   }
 
-  function findActiveContactGender() {
-    const labeledGender = findLabeledFieldValue(/\bgender\b/i, /[^\s].*/i, 40);
-    if (labeledGender && !/^(?:--|-|n\/a)$/i.test(labeledGender)) {
-      return cleanSummaryText(labeledGender, 40);
+  function findStrictActiveFieldValue(labelRegex, maxLen = 40) {
+    const labels = Array.from(document.querySelectorAll("label, dt, th, span, div, p, strong, h4, h5"));
+    const blockedValueRegex = /^(?:--|-|n\/a|details)$/i;
+    const blockedLabelLikeRegex =
+      /\b(create date|contact owner|owner|phone(?: number)?|email|city|country|office|record id|next activity date|changes saved|save|saving)\b/i;
+
+    function isPlausibleFieldValue(value) {
+      const text = cleanText(value || "");
+      if (!text) return false;
+      if (blockedValueRegex.test(text)) return false;
+      if (blockedLabelLikeRegex.test(text)) return false;
+      if (text.length > 24) return false;
+      if (/\d/.test(text)) return false;
+      const words = text.split(/\s+/).filter(Boolean);
+      if (words.length > 2) return false;
+      return true;
     }
 
-    const labeledSalutation = findLabeledFieldValue(/\bsalutation\b/i, /[^\s].*/i, 40);
-    if (labeledSalutation && !/^(?:--|-|n\/a)$/i.test(labeledSalutation)) {
-      return cleanSummaryText(labeledSalutation, 40);
+    for (const node of labels) {
+      if (!isVisible(node)) continue;
+      const labelText = cleanText(node.textContent || "");
+      if (!labelText || labelText.length > 60 || !labelRegex.test(labelText)) continue;
+
+      const siblingText = cleanText(node.nextElementSibling?.textContent || "");
+      if (siblingText && !labelRegex.test(siblingText) && isPlausibleFieldValue(siblingText)) {
+        return cleanSummaryText(siblingText, maxLen);
+      }
+
+      const row = node.closest("li, tr, [role='row'], section, article, div");
+      const rowLines = String(row?.innerText || "")
+        .split(/\n+/)
+        .map((line) => cleanText(line))
+        .filter(Boolean);
+      const labelIndex = rowLines.findIndex((line) => labelRegex.test(line));
+      if (labelIndex >= 0) {
+        const immediateNext = cleanText(rowLines[labelIndex + 1] || "");
+        if (immediateNext && !labelRegex.test(immediateNext) && isPlausibleFieldValue(immediateNext)) {
+          return cleanSummaryText(immediateNext, maxLen);
+        }
+      }
     }
 
     return "";
+  }
+
+  function findActiveContactGender() {
+    function normalizeDisplayedFieldValue(value, maxLen = 40) {
+      const text = cleanText(String(value || "").replace(/[▾▿▼▼▲△]/g, " "));
+      if (!text) return "";
+      if (/^(?:--|-|n\/a|details|undo)$/i.test(text)) return "";
+      if (/\b(changes saved|create date|contact owner|owner|phone(?: number)?|email|city|country|office|record id|next activity date)\b/i.test(text)) {
+        return "";
+      }
+      if (text.length > 24) return "";
+      const words = text.split(/\s+/).filter(Boolean);
+      if (words.length > 2) return "";
+      return cleanSummaryText(text, maxLen);
+    }
+
+    function readFieldValueFromLabel(labelRegex, maxLen = 40) {
+      const labels = Array.from(document.querySelectorAll("label, dt, th, span, div, p, strong, h4, h5"));
+      for (const node of labels) {
+        if (!isVisible(node)) continue;
+        const labelText = cleanText(node.textContent || "");
+        if (!labelText || !labelRegex.test(labelText)) continue;
+
+        const directCandidates = [
+          node.nextElementSibling,
+          node.parentElement?.querySelector("[role='combobox']"),
+          node.parentElement?.querySelector("[aria-haspopup='listbox']"),
+          node.parentElement?.querySelector("button"),
+          node.parentElement?.querySelector("[data-test-id]"),
+          node.parentElement?.querySelector("[data-testid]")
+        ].filter(Boolean);
+
+        for (const candidate of directCandidates) {
+          if (!(candidate instanceof Element) || !isVisible(candidate)) continue;
+          const firstLine = cleanText(String(candidate.innerText || candidate.textContent || "").split(/\n+/)[0] || "");
+          const normalized = normalizeDisplayedFieldValue(firstLine, maxLen);
+          if (normalized) return normalized;
+        }
+
+        const parentLines = String(node.parentElement?.innerText || "")
+          .split(/\n+/)
+          .map((line) => cleanText(line))
+          .filter(Boolean);
+        const labelIndex = parentLines.findIndex((line) => labelRegex.test(line));
+        if (labelIndex >= 0) {
+          for (let i = labelIndex + 1; i < Math.min(parentLines.length, labelIndex + 4); i += 1) {
+            const normalized = normalizeDisplayedFieldValue(parentLines[i], maxLen);
+            if (normalized) return normalized;
+          }
+        }
+      }
+      return "";
+    }
+
+    return (
+      readFieldValueFromLabel(/^\s*gender\s*$/i, 40) ||
+      readFieldValueFromLabel(/^\s*salutation\s*$/i, 40) ||
+      findStrictActiveFieldValue(/\bgender\b/i, 40) ||
+      findStrictActiveFieldValue(/\bsalutation\b/i, 40) ||
+      ""
+    );
   }
 
   function cleanSummaryText(value, maxLen = 120) {
