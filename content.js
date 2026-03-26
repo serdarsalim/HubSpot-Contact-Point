@@ -9,7 +9,8 @@
     CREATE_NOTE_ON_PAGE: "CREATE_NOTE_ON_PAGE",
     GET_NOTES_ON_PAGE: "GET_NOTES_ON_PAGE",
     APPLY_EMAIL_TEMPLATE_ON_PAGE: "APPLY_EMAIL_TEMPLATE_ON_PAGE",
-    OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE: "OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE"
+    OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE: "OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE",
+    OPEN_OR_REUSE_WHATSAPP_TAB: "OPEN_OR_REUSE_WHATSAPP_TAB"
   });
   const TIMING = shared.TIMING?.content || Object.freeze({
     tableScrollDelayMs: 240,
@@ -603,12 +604,12 @@
         border-radius: 999px;
         opacity: 0;
         pointer-events: none;
-        background-color: #e6f5fa;
+        background-color: #7c3aed;
         background-repeat: no-repeat;
         background-position: center;
         background-size: 12px 12px;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M6 3.5H3.75A1.25 1.25 0 0 0 2.5 4.75v7.5A1.25 1.25 0 0 0 3.75 13.5h7.5a1.25 1.25 0 0 0 1.25-1.25V10' stroke='%2333475b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M8.5 2.5h5v5' stroke='%2333475b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M13.25 2.75 7 9' stroke='%2333475b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-        box-shadow: 0 0 0 1px rgba(45, 62, 80, 0.08);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M6 3.5H3.75A1.25 1.25 0 0 0 2.5 4.75v7.5A1.25 1.25 0 0 0 3.75 13.5h7.5a1.25 1.25 0 0 0 1.25-1.25V10' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M8.5 2.5h5v5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M13.25 2.75 7 9' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
         transition: opacity 120ms ease;
       }
 
@@ -630,6 +631,53 @@
         outline: none;
         box-shadow: 0 0 0 2px rgba(11, 114, 133, 0.18);
       }
+
+      .cp-contact-index-phone-action-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .cp-contact-index-whatsapp-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border: 1px solid rgba(18, 140, 76, 0.22);
+        border-radius: 999px;
+        background: #25d366;
+        color: #ffffff;
+        cursor: pointer;
+        opacity: 0;
+        pointer-events: none;
+        box-shadow: 0 2px 8px rgba(37, 211, 102, 0.28);
+        transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+      }
+
+      tr:hover .cp-contact-index-whatsapp-btn,
+      [role='row']:hover .cp-contact-index-whatsapp-btn,
+      .cp-contact-index-whatsapp-btn:focus-visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .cp-contact-index-whatsapp-btn:hover,
+      .cp-contact-index-whatsapp-btn:focus-visible {
+        background: #1fbe5d;
+        border-color: rgba(18, 140, 76, 0.38);
+        box-shadow: 0 4px 12px rgba(31, 190, 93, 0.34);
+        transform: translateY(-1px);
+        outline: none;
+      }
+
+      .cp-contact-index-whatsapp-btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -639,6 +687,29 @@
     const href = String(anchor.href || anchor.getAttribute("href") || "").trim();
     if (!href) return;
     window.open(href, "_blank", "noopener,noreferrer");
+  }
+
+  async function openOrReuseWhatsappTab(url) {
+    const targetUrl = String(url || "").trim();
+    if (!targetUrl) return;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.OPEN_OR_REUSE_WHATSAPP_TAB,
+        url: targetUrl
+      });
+      if (response?.ok) return;
+    } catch (_error) {
+      // Fall back to a normal new tab below.
+    }
+
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function buildContactIndexWhatsappUrl(rawPhone) {
+    const phoneDigits = normalizePhone(rawPhone, inlineQuickActionsState.countryPrefix) || "";
+    if (!phoneDigits) return "";
+    return `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number`;
   }
 
   function findContactIndexAnchorInScope(scope) {
@@ -730,12 +801,83 @@
     }
   }
 
+  function getContactIndexPhoneColumn() {
+    const headerInfo = findHeaderRow();
+    if (!headerInfo) return null;
+    const columns = buildColumns(headerInfo);
+    if (!columns.length) return null;
+    const phoneColumnId = findPhoneColumnId(columns);
+    if (!phoneColumnId) return null;
+    return columns.find((column) => column.id === phoneColumnId) || null;
+  }
+
+  function findContactIndexPhoneContentElement(phoneCell) {
+    if (!(phoneCell instanceof Element)) return null;
+    const candidates = Array.from(phoneCell.querySelectorAll("*")).filter((element) => {
+      if (!(element instanceof Element)) return false;
+      if (element.classList.contains("cp-contact-index-whatsapp-btn")) return false;
+      const text = cleanText(element.textContent || "");
+      return !!text && PHONE_PATTERN.test(text);
+    });
+    candidates.sort((a, b) => cleanText(a.textContent || "").length - cleanText(b.textContent || "").length);
+    return candidates[0] || phoneCell.firstElementChild || null;
+  }
+
+  function createContactIndexWhatsappButton(waUrl) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "cp-contact-index-whatsapp-btn";
+    button.setAttribute("aria-label", "Open number in WhatsApp");
+    button.setAttribute("title", "Open in WhatsApp");
+    button.innerHTML = inlineActionIcon("whatsapp");
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await openOrReuseWhatsappTab(waUrl);
+    });
+    return button;
+  }
+
+  function decorateContactIndexPhoneCell(phoneCell) {
+    if (!(phoneCell instanceof Element)) return;
+    if (phoneCell.querySelector(".cp-contact-index-whatsapp-btn")) return;
+
+    const rawPhone = cleanPhoneCandidate(phoneCell.textContent || "");
+    const waUrl = buildContactIndexWhatsappUrl(rawPhone);
+    if (!waUrl) return;
+
+    const contentElement = findContactIndexPhoneContentElement(phoneCell);
+    const button = createContactIndexWhatsappButton(waUrl);
+
+    if (contentElement instanceof Element && !contentElement.classList.contains("cp-contact-index-phone-action-wrap")) {
+      const wrapper = document.createElement("span");
+      wrapper.className = "cp-contact-index-phone-action-wrap";
+      contentElement.parentNode?.insertBefore(wrapper, contentElement);
+      wrapper.appendChild(contentElement);
+      wrapper.appendChild(button);
+      return;
+    }
+
+    phoneCell.appendChild(button);
+  }
+
   function enhanceContactIndexInlineButtons() {
     if (!isContactIndexPage()) return;
     ensureContactIndexNewTabStyles();
     const anchors = Array.from(document.querySelectorAll("a[href]"));
     for (const anchor of anchors) {
       decorateContactIndexAnchor(anchor);
+    }
+
+    const phoneColumn = getContactIndexPhoneColumn();
+    const headerInfo = findHeaderRow();
+    if (!phoneColumn || !headerInfo) return;
+    const rows = getDataRows(headerInfo);
+    for (const row of rows) {
+      if (!(row instanceof Element)) continue;
+      const cells = Array.from(row.querySelectorAll("td, [role='gridcell']"));
+      const phoneCell = cells[phoneColumn.sourceIndex] || null;
+      decorateContactIndexPhoneCell(phoneCell);
     }
   }
 
@@ -2852,7 +2994,7 @@
     await createNoteOnPage(noteBody);
   }
 
-  function applyInlineWhatsappTemplate(template) {
+  async function applyInlineWhatsappTemplate(template) {
     const context = getInlineContactContextOrThrow();
     const tokens = buildInlineTemplateTokens(context);
     const phoneDigits =
@@ -2865,7 +3007,7 @@
     if (filledMessage) {
       url += `&text=${encodeURIComponent(filledMessage)}`;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+    await openOrReuseWhatsappTab(url);
   }
 
   function getTaskComposerMarkerScore(root) {
@@ -3121,7 +3263,7 @@
         markInlineTemplateUsed("note", template.id);
         setInlineQuickActionsStatus("");
       } else if (kind === "whatsapp") {
-        applyInlineWhatsappTemplate(template);
+        await applyInlineWhatsappTemplate(template);
         markInlineTemplateUsed("whatsapp", template.id);
         setInlineQuickActionsStatus("");
       }

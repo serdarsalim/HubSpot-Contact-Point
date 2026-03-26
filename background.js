@@ -5,6 +5,7 @@ const DETACHED_POPUP_URL = chrome.runtime.getURL(DETACHED_POPUP_PATH);
 const SETTINGS_KEY = "popupSettings";
 const DEFAULT_LAUNCH_MODE = "attached";
 const OPEN_POPUP_WINDOW_MESSAGE = "OPEN_POPUP_WINDOW";
+const OPEN_OR_REUSE_WHATSAPP_TAB_MESSAGE = "OPEN_OR_REUSE_WHATSAPP_TAB";
 
 async function openOrFocusPopupWindow() {
   const existingTabs = await chrome.tabs.query({ url: [DETACHED_POPUP_URL, ATTACHED_POPUP_URL] });
@@ -23,6 +24,33 @@ async function openOrFocusPopupWindow() {
     type: "popup",
     width: 980,
     height: 760
+  });
+}
+
+async function openOrReuseWhatsappTab(urlInput, sender = null) {
+  const url = String(urlInput || "").trim();
+  if (!url) {
+    throw new Error("WhatsApp URL is missing.");
+  }
+
+  const existingTabs = await chrome.tabs.query({ url: ["https://web.whatsapp.com/*"] });
+  const existingTab = [...existingTabs].sort((a, b) => Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0))[0] || null;
+
+  if (existingTab && typeof existingTab.id === "number") {
+    await chrome.tabs.update(existingTab.id, { url, active: true });
+    if (typeof existingTab.windowId === "number") {
+      await chrome.windows.update(existingTab.windowId, { focused: true });
+    }
+    return;
+  }
+
+  const targetWindowId = typeof sender?.tab?.windowId === "number" ? sender.tab.windowId : undefined;
+  const createIndex = typeof sender?.tab?.index === "number" ? sender.tab.index + 1 : undefined;
+  await chrome.tabs.create({
+    url,
+    active: true,
+    ...(typeof targetWindowId === "number" ? { windowId: targetWindowId } : {}),
+    ...(typeof createIndex === "number" ? { index: createIndex } : {})
   });
 }
 
@@ -75,11 +103,19 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== OPEN_POPUP_WINDOW_MESSAGE) return;
-  openOrFocusPopupWindow()
-    .then(() => sendResponse({ ok: true }))
-    .catch((error) => sendResponse({ ok: false, error: String(error?.message || error || "Unknown error") }));
-  return true;
+  if (message?.type === OPEN_POPUP_WINDOW_MESSAGE) {
+    openOrFocusPopupWindow()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error?.message || error || "Unknown error") }));
+    return true;
+  }
+
+  if (message?.type === OPEN_OR_REUSE_WHATSAPP_TAB_MESSAGE) {
+    openOrReuseWhatsappTab(message?.url, _sender)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error?.message || error || "Unknown error") }));
+    return true;
+  }
 });
 
 void syncActionPopupBySettings().catch((error) => {
