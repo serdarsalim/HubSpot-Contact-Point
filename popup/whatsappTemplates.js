@@ -503,6 +503,21 @@
     return text ? `${baseUrl}&text=${encodeURIComponent(text)}` : baseUrl;
   }
 
+  async function openOrReuseWhatsappTab(url) {
+    const candidates = await chrome.tabs.query({ url: ["https://web.whatsapp.com/*"] });
+    const targetTab = [...candidates].sort((a, b) => Number(b?.lastAccessed || 0) - Number(a?.lastAccessed || 0))[0] || null;
+
+    if (targetTab && typeof targetTab.id === "number") {
+      await chrome.tabs.update(targetTab.id, { url, active: true });
+      if (typeof targetTab.windowId === "number") {
+        await chrome.windows.update(targetTab.windowId, { focused: true });
+      }
+      return targetTab;
+    }
+
+    return chrome.tabs.create({ url, active: true });
+  }
+
   async function openDirectWhatsappForContact(contact) {
     if (!contact) return false;
     const countryPrefix = await ensureCountryPrefixForContact(contact);
@@ -515,7 +530,7 @@
     }
 
     try {
-      await chrome.tabs.create({ url: waUrl, active: true });
+      await openOrReuseWhatsappTab(waUrl);
       App.setStatus(`Opened WhatsApp for ${App.getContactDisplayName(contact)}.`);
       return true;
     } catch (_error) {
@@ -544,7 +559,7 @@
     App.setStatus(`Opening WhatsApp for ${App.getContactDisplayName(contact)} with \"${template.name}\"...`);
 
     try {
-      await chrome.tabs.create({ url: waUrl, active: true });
+      await openOrReuseWhatsappTab(waUrl);
       App.markTemplateApplied("whatsapp", resolvedKey, template.id);
       App.setStatus(`Opened WhatsApp for ${App.getContactDisplayName(contact)}.`);
       if (typeof App.trackEvent === "function") {
