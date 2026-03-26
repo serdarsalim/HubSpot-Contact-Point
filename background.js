@@ -44,14 +44,50 @@ async function openOrReuseWhatsappTab(urlInput, sender = null) {
     return;
   }
 
-  const targetWindowId = typeof sender?.tab?.windowId === "number" ? sender.tab.windowId : undefined;
-  const createIndex = typeof sender?.tab?.index === "number" ? sender.tab.index + 1 : undefined;
+  const allWindows = await chrome.windows.getAll();
+  const normalWindows = allWindows.filter((windowInfo) => windowInfo.type === "normal");
+  let senderWindow = null;
+  if (typeof sender?.tab?.windowId === "number") {
+    try {
+      senderWindow = await chrome.windows.get(sender.tab.windowId);
+    } catch (_error) {
+      senderWindow = null;
+    }
+  }
+
+  let targetWindowId;
+  if (senderWindow?.type === "normal" && typeof senderWindow.id === "number") {
+    targetWindowId = senderWindow.id;
+  } else {
+    const lastFocusedTab = (
+      await chrome.tabs.query({
+        active: true,
+        lastFocusedWindow: true
+      })
+    )[0] || null;
+    const lastFocusedWindow = typeof lastFocusedTab?.windowId === "number" ? allWindows.find((windowInfo) => windowInfo.id === lastFocusedTab.windowId) || null : null;
+
+    targetWindowId =
+      (lastFocusedWindow?.type === "normal" ? lastFocusedWindow.id : undefined) ||
+      normalWindows.find((windowInfo) => windowInfo.focused)?.id ||
+      normalWindows[0]?.id;
+  }
+
+  const createIndex =
+    typeof sender?.tab?.index === "number" &&
+    typeof sender?.tab?.windowId === "number" &&
+    sender.tab.windowId === targetWindowId
+      ? sender.tab.index + 1
+      : undefined;
   await chrome.tabs.create({
     url,
     active: true,
     ...(typeof targetWindowId === "number" ? { windowId: targetWindowId } : {}),
     ...(typeof createIndex === "number" ? { index: createIndex } : {})
   });
+  if (typeof targetWindowId === "number") {
+    await chrome.windows.update(targetWindowId, { focused: true });
+  }
 }
 
 function normalizeLaunchMode(value) {

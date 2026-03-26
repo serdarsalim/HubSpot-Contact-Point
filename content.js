@@ -721,17 +721,12 @@
     const targetUrl = String(url || "").trim();
     if (!targetUrl) return;
 
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.OPEN_OR_REUSE_WHATSAPP_TAB,
-        url: targetUrl
-      });
-      if (response?.ok) return;
-    } catch (_error) {
-      // Fall back to a normal new tab below.
-    }
-
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
+    const response = await chrome.runtime.sendMessage({
+      type: MESSAGE_TYPES.OPEN_OR_REUSE_WHATSAPP_TAB,
+      url: targetUrl
+    });
+    if (response?.ok) return;
+    throw new Error(String(response?.error || "Could not open WhatsApp tab."));
   }
 
   function buildContactIndexWhatsappUrl(rawPhone) {

@@ -504,18 +504,12 @@
   }
 
   async function openOrReuseWhatsappTab(url) {
-    const candidates = await chrome.tabs.query({ url: ["https://web.whatsapp.com/*"] });
-    const targetTab = [...candidates].sort((a, b) => Number(b?.lastAccessed || 0) - Number(a?.lastAccessed || 0))[0] || null;
-
-    if (targetTab && typeof targetTab.id === "number") {
-      await chrome.tabs.update(targetTab.id, { url, active: true });
-      if (typeof targetTab.windowId === "number") {
-        await chrome.windows.update(targetTab.windowId, { focused: true });
-      }
-      return targetTab;
+    const messageType = App.messageTypes?.OPEN_OR_REUSE_WHATSAPP_TAB || "OPEN_OR_REUSE_WHATSAPP_TAB";
+    const response = await chrome.runtime.sendMessage({ type: messageType, url });
+    if (!response?.ok) {
+      throw new Error(String(response?.error || "Could not open WhatsApp tab."));
     }
-
-    return chrome.tabs.create({ url, active: true });
+    return true;
   }
 
   async function openDirectWhatsappForContact(contact) {
