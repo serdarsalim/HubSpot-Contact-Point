@@ -850,9 +850,31 @@
     return rawName.split(/\s+/)[0] || "";
   }
 
+  function getGenderFromContact(contact) {
+    const values = contact?.values && typeof contact.values === "object" ? contact.values : {};
+    const keyMatchers = [
+      (key) => key === "gender" || key.includes("gender"),
+      (key) => key === "salutation" || key.includes("salutation"),
+      (key) => key === "sex" || /(?:^|_)sex(?:_|$)/.test(key),
+      (key) => key === "title" || key.includes("title")
+    ];
+
+    for (const matchesKey of keyMatchers) {
+      for (const [rawKey, rawValue] of Object.entries(values)) {
+        const normalizedKey = templateTokenKey(rawKey);
+        if (!normalizedKey || !matchesKey(normalizedKey)) continue;
+        const value = String(rawValue || "").trim();
+        if (value) return value;
+      }
+    }
+
+    return "";
+  }
+
   function getContactTokenMap(contact) {
     return {
-      name: getFirstNameFromContact(contact)
+      name: getFirstNameFromContact(contact),
+      gender: getGenderFromContact(contact)
     };
   }
 

@@ -323,10 +323,38 @@
     return nameCol ? nameCol.id : null;
   }
 
+  function resolveGenderValue(values) {
+    const source = values && typeof values === "object" ? values : {};
+    const keyMatchers = [
+      (key) => key === "gender" || key.includes("gender"),
+      (key) => key === "salutation" || key.includes("salutation"),
+      (key) => key === "sex" || /(?:^|_)sex(?:_|$)/.test(key),
+      (key) => key === "title" || key.includes("title")
+    ];
+
+    for (const matchesKey of keyMatchers) {
+      for (const [rawKey, rawValue] of Object.entries(source)) {
+        const normalizedKey = String(rawKey || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+        if (!normalizedKey || !matchesKey(normalizedKey)) continue;
+        const value = cleanText(rawValue || "");
+        if (value) return value;
+      }
+    }
+
+    return "";
+  }
+
   function applyMessageTemplate(template, values, nameColumnId) {
     const rawName = cleanText(values?.[nameColumnId || ""] || "");
     const firstName = rawName ? rawName.split(" ")[0] : "";
-    return String(template || "").replace(/\[name\]/gi, firstName);
+    const gender = resolveGenderValue(values);
+    return String(template || "")
+      .replace(/\[name\]/gi, firstName)
+      .replace(/\[gender\]/gi, gender);
   }
 
   function extractValuesFromRow(row, columns) {
@@ -1026,6 +1054,20 @@
     return candidates[0] || "";
   }
 
+  function findActiveContactGender() {
+    const labeledGender = findLabeledFieldValue(/\bgender\b/i, /[^\s].*/i, 40);
+    if (labeledGender && !/^(?:--|-|n\/a)$/i.test(labeledGender)) {
+      return cleanSummaryText(labeledGender, 40);
+    }
+
+    const labeledSalutation = findLabeledFieldValue(/\bsalutation\b/i, /[^\s].*/i, 40);
+    if (labeledSalutation && !/^(?:--|-|n\/a)$/i.test(labeledSalutation)) {
+      return cleanSummaryText(labeledSalutation, 40);
+    }
+
+    return "";
+  }
+
   function cleanSummaryText(value, maxLen = 120) {
     const cleaned = cleanText(value || "").replace(/\s*[|•·]\s*/g, " ").trim();
     if (!cleaned) return "";
@@ -1176,10 +1218,14 @@
     const owner = findActiveContactOwner();
     const email = findActiveContactEmail();
     const phone = findActiveContactPhone();
+    const gender = findActiveContactGender();
     const recentActivity = collectRecentActivity(1);
     const phoneDigits = normalizePhone(phone, countryPrefix) || "";
     const baseWaUrl = phoneDigits ? `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number` : "";
-    const messageBody = String(messageText || "").replace(/\[name\]/gi, name ? name.split(" ")[0] : "").trim();
+    const messageBody = String(messageText || "")
+      .replace(/\[name\]/gi, name ? name.split(" ")[0] : "")
+      .replace(/\[gender\]/gi, gender)
+      .trim();
     const waUrl = baseWaUrl ? (messageBody ? `${baseWaUrl}&text=${encodeURIComponent(messageBody)}` : baseWaUrl) : "";
 
     return {
@@ -1191,6 +1237,7 @@
         recordId,
         values: {
           name,
+          gender,
           owner,
           email,
           phone,
@@ -2492,6 +2539,7 @@
     const fullName = cleanText(values.name || "");
     const firstName = fullName ? fullName.split(" ")[0] : "";
     const resolvedName = firstName || fullName;
+    const gender = resolveGenderValue(values);
     const owner = cleanText(values.owner || context?.owner || "");
     const email = cleanText(values.email || "");
     const phone = cleanText(values.phone || "");
@@ -2499,6 +2547,7 @@
 
     const tokens = {
       name: resolvedName,
+      gender,
       first_name: resolvedName,
       firstname: resolvedName,
       full_name: fullName,
