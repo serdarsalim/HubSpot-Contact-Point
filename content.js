@@ -1675,6 +1675,17 @@
     return true;
   }
 
+  function clickEmailActivityTab() {
+    const labels = ["emails", "email"];
+    for (const label of labels) {
+      const tab = findHubSpotCenterTabControl(label);
+      if (!tab) continue;
+      tab.click();
+      return true;
+    }
+    return false;
+  }
+
   function clickTaskActivityTab() {
     const labels = ["tasks", "task", "to-dos", "to do", "todo"];
     for (const label of labels) {
@@ -1888,6 +1899,66 @@
     }
 
     return bestScore > 5 ? best : null;
+  }
+
+  function getEmailComposerTriggers() {
+    const candidates = Array.from(document.querySelectorAll("button, [role='button'], a")).filter((el) => isVisible(el));
+    const matches = [];
+
+    for (const el of candidates) {
+      const text = elementText(el).toLowerCase();
+      const aria = cleanText(el.getAttribute?.("aria-label") || "").toLowerCase();
+      const testId = cleanText(
+        el.getAttribute?.("data-test-id") || el.getAttribute?.("data-testid") || el.getAttribute?.("data-selenium-test") || ""
+      ).toLowerCase();
+      const title = cleanText(el.getAttribute?.("title") || "").toLowerCase();
+      const hint = `${text} ${aria} ${testId} ${title}`.replace(/\s+/g, " ").trim();
+      if (!hint) continue;
+
+      const root = el.closest("[role='dialog'], [role='menu'], [role='toolbar'], [role='tablist'], section, article, li, div") || el;
+      const rootText = elementText(root).toLowerCase();
+
+      const opensEmailComposer =
+        hint.includes("send email") ||
+        hint.includes("create email") ||
+        hint.includes("log email") ||
+        hint.includes("write email") ||
+        hint.includes("new email") ||
+        hint === "email" ||
+        (hint.includes("compose") && (hint.includes("email") || rootText.includes("emails")));
+      if (!opensEmailComposer) continue;
+
+      let score = 0;
+      if (hint.includes("send email")) score += 42;
+      if (hint.includes("create email")) score += 40;
+      if (hint.includes("log email")) score += 34;
+      if (hint.includes("write email")) score += 30;
+      if (hint.includes("new email")) score += 28;
+      if (hint === "email") score += 20;
+      if (hint.includes("compose")) score += 12;
+
+      if (hint.includes("note")) score -= 60;
+      if (hint.includes("task")) score -= 50;
+      if (hint.includes("call")) score -= 40;
+      if (hint.includes("meeting")) score -= 40;
+      if (hint.includes("whatsapp")) score -= 60;
+      if (hint.includes("save")) score -= 28;
+      if (hint.includes("cancel") || hint.includes("close")) score -= 50;
+      if (hint.includes("more")) score -= 18;
+
+      if (rootText.includes("activity") && rootText.includes("notes") && rootText.includes("emails")) score += 16;
+      if (rootText.includes("activities") && rootText.includes("intelligence")) score += 14;
+      if (rootText.includes("about this contact")) score -= 40;
+      if (rootText.includes("log whatsapp message")) score -= 60;
+      if (rootText.includes("save note") || rootText.includes("create note")) score -= 70;
+      if (el.getAttribute("role") === "tab") score -= 40;
+      if (el.closest("[role='menu'], [role='listbox']")) score -= 26;
+
+      if (score < 18) continue;
+      matches.push({ el, score });
+    }
+
+    return matches.sort((a, b) => b.score - a.score).map((item) => item.el);
   }
 
   function getElementHint(el) {
@@ -2316,16 +2387,7 @@
   }
 
   function clickEmailComposerTrigger() {
-    const triggers = Array.from(document.querySelectorAll("button, [role='button'], a")).filter((el) => {
-      if (!isVisible(el)) return false;
-      const text = elementText(el).toLowerCase();
-      if (!text) return false;
-      if (text.includes("send")) return false;
-      if (text.includes("email")) return true;
-      if (text.includes("compose")) return true;
-      return false;
-    });
-
+    const triggers = getEmailComposerTriggers();
     if (!triggers.length) return false;
     triggers[0].click();
     return true;
@@ -2335,6 +2397,8 @@
     for (let i = 0; i < TIMING.emailComposerOpenAttempts; i += 1) {
       const existing = findOpenEmailDialog();
       if (existing) break;
+      if (i === 0 || i % 3 === 0) clickActivitiesTab();
+      if (i === 1 || i % 3 === 1) clickEmailActivityTab();
       clickEmailComposerTrigger();
       await sleep(TIMING.emailComposerOpenDelayMs);
     }

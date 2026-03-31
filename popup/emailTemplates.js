@@ -50,6 +50,45 @@
     return String(template?.subject || "").trim() || htmlToPlainText(template?.body);
   }
 
+  function scoreEmailTemplateSearchMatch(template, query) {
+    const normalizedQuery = App.normalizeSearchText(query || "");
+    if (!normalizedQuery) return 0;
+
+    const name = App.normalizeSearchText(template?.name || "");
+    const subject = App.normalizeSearchText(template?.subject || "");
+    const nameWords = name.split(/\s+/).filter(Boolean);
+    const subjectWords = subject.split(/\s+/).filter(Boolean);
+
+    if (name === normalizedQuery) return 1000;
+    if (subject === normalizedQuery) return 700;
+    if (name.startsWith(normalizedQuery)) return 450;
+    if (subject.startsWith(normalizedQuery)) return 260;
+    if (nameWords.includes(normalizedQuery)) return 220;
+    if (subjectWords.includes(normalizedQuery)) return 140;
+    if (name.includes(normalizedQuery)) return 120;
+    if (subject.includes(normalizedQuery)) return 80;
+    return 0;
+  }
+
+  function rankEmailTemplatesForQuery(templates, query) {
+    const normalizedQuery = App.normalizeSearchText(query || "");
+    const source = Array.isArray(templates) ? templates : [];
+    if (!normalizedQuery) return source;
+
+    return [...source]
+      .map((template, index) => ({
+        template,
+        index,
+        score: scoreEmailTemplateSearchMatch(template, normalizedQuery)
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        return a.index - b.index;
+      })
+      .map((entry) => entry.template);
+  }
+
   function renderTemplateSourceBadge(template) {
     if (template?.source !== "cloud") return "";
     return `<span class='template-source-pill cloud' aria-label='Cloud template' title='Cloud template'>☁</span>`;
@@ -705,13 +744,7 @@
     if (!dom.emailTemplatePickList) return;
     const templates = getMergedEmailTemplates();
     const query = App.normalizeSearchText(state.emailTemplatePickState?.query || "");
-    const matchingTemplates = query
-      ? templates.filter((template) => {
-          const name = App.normalizeSearchText(template?.name || "");
-          const subject = App.normalizeSearchText(template?.subject || "");
-          return name.includes(query) || subject.includes(query);
-        })
-      : templates;
+    const matchingTemplates = query ? rankEmailTemplatesForQuery(templates, query) : templates;
     if (!templates.length) {
       dom.emailTemplatePickList.innerHTML = "<div class='email-template-empty'>No templates found.</div>";
       return;
