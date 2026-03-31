@@ -976,6 +976,7 @@
       setNoteTemplatesMode(false);
     }
     setEmailTemplatesMode(true);
+    state.emailTemplatesSearchQuery = "";
     App.loadEmailTemplatesDraftFromSettings();
     App.renderEmailTemplatesPage();
     if (typeof App.ensureEmailBodyEditor === "function") {
@@ -1016,6 +1017,7 @@
       setNoteTemplatesMode(false);
     }
     setWhatsappTemplatesMode(true);
+    state.whatsappTemplatesSearchQuery = "";
     App.loadWhatsappTemplatesDraftFromSettings();
     App.renderWhatsappTemplatesPage();
   }
@@ -1067,6 +1069,7 @@
       setWhatsappTemplatesMode(false);
     }
     setNoteTemplatesMode(true);
+    state.noteTemplatesSearchQuery = "";
     App.loadNoteTemplatesDraftFromSettings();
     App.renderNoteTemplatesPage();
   }
