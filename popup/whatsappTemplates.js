@@ -124,7 +124,7 @@
       type: "WHATSAPP"
     }));
     const cloudTemplates = Array.isArray(state.cloud?.whatsappTemplates) ? state.cloud.whatsappTemplates : [];
-    return [...localTemplates, ...cloudTemplates];
+    return App.sortTemplatesByUsage([...localTemplates, ...cloudTemplates], "whatsapp");
   }
 
   function getActiveWhatsappTemplateDraft() {

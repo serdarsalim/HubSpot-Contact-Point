@@ -1912,6 +1912,7 @@
         constants.WHATSAPP_TEMPLATES_LOCAL_KEY,
         constants.NOTE_TEMPLATES_LOCAL_KEY,
         constants.TEMPLATE_USAGE_LOCAL_KEY,
+        constants.TEMPLATE_STATS_LOCAL_KEY,
         constants.QUICK_NOTES_LOCAL_KEY,
         constants.CLOUD_AUTH_LOCAL_KEY,
         constants.CLOUD_AUTH_LIST_LOCAL_KEY,
@@ -1930,6 +1931,7 @@
     const localWhatsappTemplates = localResult[constants.WHATSAPP_TEMPLATES_LOCAL_KEY];
     const localNoteTemplates = localResult[constants.NOTE_TEMPLATES_LOCAL_KEY];
     const savedTemplateUsage = localResult[constants.TEMPLATE_USAGE_LOCAL_KEY];
+    const savedTemplateStats = localResult[constants.TEMPLATE_STATS_LOCAL_KEY];
     const savedQuickNotes = localResult[constants.QUICK_NOTES_LOCAL_KEY];
     const savedCloudAuth = localResult[constants.CLOUD_AUTH_LOCAL_KEY];
     const savedCloudAuthList = localResult[constants.CLOUD_AUTH_LIST_LOCAL_KEY];
@@ -1942,6 +1944,7 @@
     );
     const noteTemplates = App.normalizeNoteTemplates(hasLocalNoteTemplates ? localNoteTemplates : legacySyncNoteTemplates);
     state.templateUsageByContact = App.normalizeTemplateUsageMap(savedTemplateUsage);
+    state.templateStats = App.normalizeTemplateStatsMap(savedTemplateStats);
     state.quickNotesByRecordId = App.normalizeQuickNotesMap(savedQuickNotes);
     state.settings = {
       ...constants.DEFAULT_SETTINGS,

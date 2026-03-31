@@ -471,7 +471,7 @@
       type: "EMAIL"
     }));
     const cloudTemplates = Array.isArray(state.cloud?.emailTemplates) ? state.cloud.emailTemplates : [];
-    return [...localTemplates, ...cloudTemplates];
+    return App.sortTemplatesByUsage([...localTemplates, ...cloudTemplates], "email");
   }
 
   function getActiveEmailTemplateDraft() {

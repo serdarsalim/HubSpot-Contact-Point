@@ -171,6 +171,7 @@
   const WHATSAPP_TEMPLATES_LOCAL_KEY = "popupWhatsappTemplates";
   const NOTE_TEMPLATES_LOCAL_KEY = "popupNoteTemplates";
   const TEMPLATE_USAGE_LOCAL_KEY = "popupTemplateUsageByContact";
+  const TEMPLATE_STATS_LOCAL_KEY = "popupTemplateUsageStats";
   const QUICK_NOTES_LOCAL_KEY = "popupQuickNotesByRecordId";
   const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
   const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
@@ -261,6 +262,10 @@
     },
     contactsSearchQuery: "",
     templateUsageByContact: {},
+    templateStats: {
+      email: {},
+      whatsapp: {}
+    },
     quickNotesByRecordId: {},
     cloud: {
       auth: null,
@@ -274,6 +279,7 @@
     }
   };
   let templateUsageSaveTimerId = null;
+  let templateStatsSaveTimerId = null;
   let quickNotesSaveTimerId = null;
 
   function columnType(col) {
@@ -556,7 +562,7 @@
       readOnly: false,
       type: "EMAIL"
     }));
-    return [...localTemplates, ...state.cloud.emailTemplates];
+    return sortTemplatesByUsage([...localTemplates, ...state.cloud.emailTemplates], "email");
   }
 
   function getMergedWhatsappTemplates() {
@@ -566,7 +572,7 @@
       readOnly: false,
       type: "WHATSAPP"
     }));
-    return [...localTemplates, ...state.cloud.whatsappTemplates];
+    return sortTemplatesByUsage([...localTemplates, ...state.cloud.whatsappTemplates], "whatsapp");
   }
 
   function getMergedNoteTemplates() {
@@ -987,6 +993,10 @@
     return String(kind || "").toLowerCase() === "whatsapp" ? "whatsapp" : "email";
   }
 
+  function normalizeTemplateStatsKind(kind) {
+    return normalizeTemplateUsageKind(kind);
+  }
+
   function normalizeTemplateUsageMap(rawUsage) {
     if (!rawUsage || typeof rawUsage !== "object") return {};
     const normalized = {};
@@ -1021,6 +1031,35 @@
     return normalized;
   }
 
+  function normalizeTemplateStatsMap(rawStats) {
+    const source = rawStats && typeof rawStats === "object" ? rawStats : {};
+    const normalized = {
+      email: {},
+      whatsapp: {}
+    };
+
+    for (const kind of ["email", "whatsapp"]) {
+      const kindStats = source[kind] && typeof source[kind] === "object" ? source[kind] : {};
+      for (const [templateIdInput, statsInput] of Object.entries(kindStats)) {
+        const templateId = String(templateIdInput || "").trim();
+        if (!templateId || !statsInput || typeof statsInput !== "object") continue;
+        const count = Number(statsInput.count);
+        const lastUsedAtRaw = Number(statsInput.lastUsedAt);
+        const entry = {};
+        if (Number.isFinite(count) && count > 0) {
+          entry.count = Math.floor(count);
+        }
+        if (Number.isFinite(lastUsedAtRaw) && lastUsedAtRaw > 0) {
+          entry.lastUsedAt = Math.floor(lastUsedAtRaw);
+        }
+        if (!Object.keys(entry).length) continue;
+        normalized[kind][templateId] = entry;
+      }
+    }
+
+    return normalized;
+  }
+
   function scheduleTemplateUsagePersist() {
     if (templateUsageSaveTimerId) {
       clearTimeout(templateUsageSaveTimerId);
@@ -1031,6 +1070,19 @@
       const payload = normalizeTemplateUsageMap(state.templateUsageByContact);
       state.templateUsageByContact = payload;
       void chrome.storage.local.set({ [TEMPLATE_USAGE_LOCAL_KEY]: payload });
+    }, 180);
+  }
+
+  function scheduleTemplateStatsPersist() {
+    if (templateStatsSaveTimerId) {
+      clearTimeout(templateStatsSaveTimerId);
+      templateStatsSaveTimerId = null;
+    }
+    templateStatsSaveTimerId = setTimeout(() => {
+      templateStatsSaveTimerId = null;
+      const payload = normalizeTemplateStatsMap(state.templateStats);
+      state.templateStats = payload;
+      void chrome.storage.local.set({ [TEMPLATE_STATS_LOCAL_KEY]: payload });
     }, 180);
   }
 
@@ -1102,6 +1154,54 @@
     const usageKind = normalizeTemplateUsageKind(kind);
     contactUsage[usageKind][templateId] = true;
     scheduleTemplateUsagePersist();
+    recordTemplateUse(usageKind, templateId);
+  }
+
+  function getTemplateStatsEntry(kind, templateIdInput) {
+    const statsKind = normalizeTemplateStatsKind(kind);
+    const templateId = String(templateIdInput || "").trim();
+    if (!templateId) return null;
+    if (!state.templateStats[statsKind] || typeof state.templateStats[statsKind] !== "object") {
+      state.templateStats[statsKind] = {};
+    }
+    if (!state.templateStats[statsKind][templateId] || typeof state.templateStats[statsKind][templateId] !== "object") {
+      state.templateStats[statsKind][templateId] = { count: 0, lastUsedAt: 0 };
+    }
+    return state.templateStats[statsKind][templateId];
+  }
+
+  function recordTemplateUse(kind, templateIdInput) {
+    const entry = getTemplateStatsEntry(kind, templateIdInput);
+    if (!entry) return;
+    entry.count = Math.max(0, Number(entry.count || 0)) + 1;
+    entry.lastUsedAt = Date.now();
+    scheduleTemplateStatsPersist();
+  }
+
+  function getTemplateStats(kind, templateIdInput) {
+    const statsKind = normalizeTemplateStatsKind(kind);
+    const templateId = String(templateIdInput || "").trim();
+    if (!templateId) {
+      return { count: 0, lastUsedAt: 0 };
+    }
+    const raw = state.templateStats?.[statsKind]?.[templateId];
+    return {
+      count: Math.max(0, Number(raw?.count || 0) || 0),
+      lastUsedAt: Math.max(0, Number(raw?.lastUsedAt || 0) || 0)
+    };
+  }
+
+  function sortTemplatesByUsage(templatesInput, kind) {
+    const templates = Array.isArray(templatesInput) ? [...templatesInput] : [];
+    const statsKind = normalizeTemplateStatsKind(kind);
+    templates.sort((a, b) => {
+      const aStats = getTemplateStats(statsKind, a?.id);
+      const bStats = getTemplateStats(statsKind, b?.id);
+      if (aStats.count !== bStats.count) return bStats.count - aStats.count;
+      if (aStats.lastUsedAt !== bStats.lastUsedAt) return bStats.lastUsedAt - aStats.lastUsedAt;
+      return String(a?.name || "").localeCompare(String(b?.name || ""), undefined, { sensitivity: "base" });
+    });
+    return templates;
   }
 
   function hasTemplateApplied(kind, contactKeyInput, templateIdInput) {
@@ -1387,6 +1487,7 @@
     WHATSAPP_TEMPLATES_LOCAL_KEY,
     NOTE_TEMPLATES_LOCAL_KEY,
     TEMPLATE_USAGE_LOCAL_KEY,
+    TEMPLATE_STATS_LOCAL_KEY,
     QUICK_NOTES_LOCAL_KEY,
     CLOUD_AUTH_LOCAL_KEY,
     CLOUD_AUTH_LIST_LOCAL_KEY,
@@ -1475,7 +1576,11 @@
     buildContactUrl,
     getSelectedContacts,
     normalizeTemplateUsageMap,
+    normalizeTemplateStatsMap,
     markTemplateApplied,
+    recordTemplateUse,
+    getTemplateStats,
+    sortTemplatesByUsage,
     hasTemplateApplied,
     normalizeQuickNotesMap,
     getQuickNoteForRecordId,
