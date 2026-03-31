@@ -842,6 +842,7 @@
         recordId,
         portalId,
         async (tabId) => {
+          await chrome.tabs.update(tabId, { active: true });
           await App.sleep(timing.emailComposerReadyDelayMs);
           return chrome.tabs.sendMessage(tabId, {
             type: MT.OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE,
@@ -850,7 +851,7 @@
             bodyHtml
           });
         },
-        { allowOpenFresh: true }
+        { allowOpenFresh: true, interaction: "email" }
       );
 
       if (!response?.ok) {

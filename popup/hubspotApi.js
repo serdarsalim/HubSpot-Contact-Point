@@ -260,6 +260,7 @@
 
   async function withContactTab(recordId, portalId, work, options = {}) {
     const allowOpenFresh = options.allowOpenFresh !== false;
+    const interaction = String(options.interaction || "").trim().toLowerCase();
     const cleanId = String(recordId || "").replace(/\D/g, "");
     if (!cleanId) {
       throw new Error("Invalid Record ID.");
@@ -285,7 +286,8 @@
       if (!portalId) {
         throw new Error("Could not detect HubSpot portal ID for this contact.");
       }
-      const url = `${App.buildHubSpotContactUrl(cleanId, portalId, await resolveHubSpotOrigin())}?interaction=note`;
+      const baseUrl = App.buildHubSpotContactUrl(cleanId, portalId, await resolveHubSpotOrigin());
+      const url = interaction ? `${baseUrl}?interaction=${encodeURIComponent(interaction)}` : baseUrl;
       const openedTab = await chrome.tabs.create({ url, active: false });
       if (!openedTab || typeof openedTab.id !== "number") {
         throw new Error("Could not open HubSpot contact tab.");
@@ -341,7 +343,7 @@
     return withContactTab(recordId, portalId, async (tabId) => {
       await sendCreateNoteMessage(tabId, noteBody);
       return { ok: true };
-    }, { allowOpenFresh: true });
+    }, { allowOpenFresh: true, interaction: "note" });
   }
 
   async function readSingleHubSpotNotes(recordId, portalId) {

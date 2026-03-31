@@ -29,6 +29,7 @@
   const WHATSAPP_TEMPLATES_LOCAL_KEY = "popupWhatsappTemplates";
   const NOTE_TEMPLATES_LOCAL_KEY = "popupNoteTemplates";
   const TEMPLATE_USAGE_LOCAL_KEY = "popupTemplateUsageByContact";
+  const TEMPLATE_STATS_LOCAL_KEY = "popupTemplateUsageStats";
   const INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY = "popupInlineNoteTemplateUsageByContact";
   const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
   const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
@@ -2034,9 +2035,11 @@
       if (isRecipientFieldHint(hint)) score -= 40;
       if (hint.includes("search")) score -= 18;
       if (type === "email") score -= 20;
-      if (tag === "input") score += 3;
+      if (tag === "input") score += 16;
+      if (tag === "textarea") score -= 12;
       if (!type || type === "text") score += 2;
       if (el.getAttribute("contenteditable") === "true") score -= 10;
+      if (el.getAttribute("role") === "textbox") score -= 8;
 
       const rect = el.getBoundingClientRect();
       if (rect.height <= 64) score += 2;
@@ -2049,6 +2052,15 @@
     }
 
     return bestScore >= 10 ? best : null;
+  }
+
+  async function waitForSubjectInput(dialog, attempts = 5, delayMs = 160) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const subjectInput = findSubjectInput(dialog);
+      if (subjectInput) return subjectInput;
+      await sleep(delayMs);
+    }
+    return null;
   }
 
   function getIframeEditorElement(iframe) {
@@ -2343,7 +2355,7 @@
 
     const subjectText = String(subject || "").trim();
     if (subjectText) {
-      const subjectInput = findSubjectInput(dialog);
+      const subjectInput = await waitForSubjectInput(dialog);
       if (!subjectInput) {
         throw new Error("Could not find the email Subject field.");
       }
@@ -2815,6 +2827,47 @@
     }
   }
 
+  function normalizeInlineTemplateStatsMap(rawStats) {
+    const source = rawStats && typeof rawStats === "object" ? rawStats : {};
+    const normalized = { email: {}, whatsapp: {} };
+
+    for (const kind of ["email", "whatsapp"]) {
+      const kindStats = source[kind] && typeof source[kind] === "object" ? source[kind] : {};
+      for (const [templateIdInput, statsInput] of Object.entries(kindStats)) {
+        const templateId = cleanText(templateIdInput || "");
+        if (!templateId || !statsInput || typeof statsInput !== "object") continue;
+        const count = Number(statsInput.count);
+        const lastUsedAt = Number(statsInput.lastUsedAt);
+        if (!Number.isFinite(count) || count <= 0) continue;
+        normalized[kind][templateId] = {
+          count: Math.max(1, Math.floor(count)),
+          lastUsedAt: Number.isFinite(lastUsedAt) && lastUsedAt > 0 ? Math.floor(lastUsedAt) : 0
+        };
+      }
+    }
+
+    return normalized;
+  }
+
+  async function recordInlineTemplateStatsUse(kind, templateIdInput) {
+    const usageKind = normalizeInlineUsageKind(kind);
+    const templateId = cleanText(templateIdInput || "");
+    if (!templateId) return;
+
+    try {
+      const current = await chrome.storage.local.get([TEMPLATE_STATS_LOCAL_KEY]);
+      const stats = normalizeInlineTemplateStatsMap(current?.[TEMPLATE_STATS_LOCAL_KEY]);
+      const existing = stats[usageKind]?.[templateId] || { count: 0, lastUsedAt: 0 };
+      stats[usageKind][templateId] = {
+        count: Math.max(0, Number(existing.count || 0)) + 1,
+        lastUsedAt: Date.now()
+      };
+      await chrome.storage.local.set({ [TEMPLATE_STATS_LOCAL_KEY]: stats });
+    } catch (_error) {
+      // Ignore storage write failures.
+    }
+  }
+
   function persistInlineNoteTemplateUsage() {
     const payload = normalizeInlineNoteTemplateUsageMap(inlineQuickActionsState.noteTemplateUsageByContact);
     inlineQuickActionsState.noteTemplateUsageByContact = payload;
@@ -2843,6 +2896,7 @@
     const usageKind = normalizeInlineUsageKind(kind);
     usage[usageKind][templateId] = true;
     persistInlineTemplateUsage();
+    void recordInlineTemplateStatsUse(usageKind, templateId);
   }
 
   function findInlineCloudAuthByOrganizationId(organizationIdInput) {
