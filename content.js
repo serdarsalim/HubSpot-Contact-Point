@@ -38,6 +38,8 @@
   const CLOUD_NOTE_CACHE_PREFIX = "popupCloudNoteTemplates::";
   const CLOUD_TEMPLATE_ID_PREFIX = "cloud_";
   const INLINE_QUICK_ACTIONS_ROOT_ID = "cpInlineQuickActionsRoot";
+  const PENDING_INLINE_EMAIL_APPLY_SESSION_KEY = "cpPendingInlineEmailApply";
+  const PENDING_INLINE_NOTE_APPLY_SESSION_KEY = "cpPendingInlineNoteApply";
   const INLINE_QUICK_ACTIONS_STYLE_ID = "cpInlineQuickActionsStyle";
   const INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY = "popupInlineQuickActionsPosition";
   const INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS = 900;
@@ -1513,6 +1515,79 @@
     );
   }
 
+  function isInlineQuickActionsElement(element) {
+    return !!(element instanceof Element && element.closest(`#${INLINE_QUICK_ACTIONS_ROOT_ID}`));
+  }
+
+  function getCurrentContactRouteContext() {
+    return {
+      portalId: getPortalIdFromPath(),
+      recordId: getRecordIdFromPath(),
+      origin: String(location.origin || "")
+    };
+  }
+
+  function buildCurrentContactInteractionUrl(interaction) {
+    const { portalId, recordId, origin } = getCurrentContactRouteContext();
+    const cleanInteraction = String(interaction || "").trim().toLowerCase();
+    if (!portalId || !recordId || !origin || !cleanInteraction) return "";
+    return `${origin}/contacts/${portalId}/record/0-1/${recordId}?interaction=${encodeURIComponent(cleanInteraction)}`;
+  }
+
+  function savePendingInlineEmailApply(payload) {
+    try {
+      window.sessionStorage?.setItem(PENDING_INLINE_EMAIL_APPLY_SESSION_KEY, JSON.stringify(payload || {}));
+    } catch (_error) {
+      // Ignore storage failures and fall back to direct page automation only.
+    }
+  }
+
+  function loadPendingInlineEmailApply() {
+    try {
+      const raw = window.sessionStorage?.getItem(PENDING_INLINE_EMAIL_APPLY_SESSION_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function clearPendingInlineEmailApply() {
+    try {
+      window.sessionStorage?.removeItem(PENDING_INLINE_EMAIL_APPLY_SESSION_KEY);
+    } catch (_error) {
+      // Ignore storage failures.
+    }
+  }
+
+  function savePendingInlineNoteApply(payload) {
+    try {
+      window.sessionStorage?.setItem(PENDING_INLINE_NOTE_APPLY_SESSION_KEY, JSON.stringify(payload || {}));
+    } catch (_error) {
+      // Ignore storage failures and fall back to direct page automation only.
+    }
+  }
+
+  function loadPendingInlineNoteApply() {
+    try {
+      const raw = window.sessionStorage?.getItem(PENDING_INLINE_NOTE_APPLY_SESSION_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function clearPendingInlineNoteApply() {
+    try {
+      window.sessionStorage?.removeItem(PENDING_INLINE_NOTE_APPLY_SESSION_KEY);
+    } catch (_error) {
+      // Ignore storage failures.
+    }
+  }
+
   function isLikelyPropertyFieldHint(hint) {
     const text = String(hint || "").toLowerCase();
     if (!text) return false;
@@ -1610,6 +1685,7 @@
   function clickNoteTrigger() {
     const triggers = Array.from(document.querySelectorAll("button, [role='button']")).filter((el) => {
       if (!isVisible(el)) return false;
+      if (isInlineQuickActionsElement(el)) return false;
       const text = elementText(el).toLowerCase();
       if (!text) return false;
       if (text.includes("cancel") || text.includes("close")) return false;
@@ -1632,6 +1708,7 @@
 
     for (const el of controls) {
       if (!isVisible(el)) continue;
+      if (isInlineQuickActionsElement(el)) continue;
       const label = elementText(el).toLowerCase();
       if (!label) continue;
       if (label !== desired) continue;
@@ -1903,7 +1980,9 @@
   }
 
   function getEmailComposerTriggers() {
-    const candidates = Array.from(document.querySelectorAll("button, [role='button'], a")).filter((el) => isVisible(el));
+    const candidates = Array.from(document.querySelectorAll("button, [role='button'], a")).filter(
+      (el) => isVisible(el) && !isInlineQuickActionsElement(el)
+    );
     const matches = [];
 
     for (const el of candidates) {
@@ -2435,6 +2514,8 @@
     countryPrefix: DEFAULT_COUNTRY_CODE,
     position: null,
     busy: false,
+    pendingEmailApplyRunning: false,
+    pendingNoteApplyRunning: false,
     searchQuery: "",
     lastUrl: "",
     watcherTimerId: 0,
@@ -3492,7 +3573,64 @@
     const subject = applyInlineTemplateTokens(template?.subject || "", tokens).trim();
     const bodyHtml = applyInlineTemplateTokens(template?.body || "", escapedTokens).trim();
     const bodyText = applyInlineTemplateTokens(template?.body || "", tokens).trim();
-    await openEmailAndApplyTemplateOnPage(subject, htmlToPlainText(bodyText), bodyHtml);
+    const bodyPlainText = htmlToPlainText(bodyText);
+
+    if (findOpenEmailDialog()) {
+      await applyEmailTemplateOnPage(subject, bodyPlainText, bodyHtml);
+      return;
+    }
+
+    const interactionUrl = buildCurrentContactInteractionUrl("email");
+    if (!interactionUrl) {
+      await openEmailAndApplyTemplateOnPage(subject, bodyPlainText, bodyHtml);
+      return;
+    }
+
+    savePendingInlineEmailApply({
+      recordId: context.recordId,
+      subject,
+      body: bodyPlainText,
+      bodyHtml,
+      createdAt: Date.now()
+    });
+    location.assign(interactionUrl);
+  }
+
+  async function runPendingInlineEmailApplyIfNeeded() {
+    if (inlineQuickActionsState.pendingEmailApplyRunning) return;
+
+    const pending = loadPendingInlineEmailApply();
+    if (!pending) return;
+
+    const currentRecordId = getRecordIdFromPath();
+    if (!currentRecordId || String(pending.recordId || "") !== String(currentRecordId)) {
+      clearPendingInlineEmailApply();
+      return;
+    }
+
+    if (Date.now() - Number(pending.createdAt || 0) > 2 * 60 * 1000) {
+      clearPendingInlineEmailApply();
+      return;
+    }
+
+    inlineQuickActionsState.pendingEmailApplyRunning = true;
+    try {
+      for (let attempt = 0; attempt < TIMING.emailComposerOpenAttempts + 4; attempt += 1) {
+        if (findOpenEmailDialog()) break;
+        await sleep(TIMING.emailComposerOpenDelayMs);
+      }
+
+      if (findOpenEmailDialog()) {
+        await applyEmailTemplateOnPage(String(pending.subject || ""), String(pending.body || ""), String(pending.bodyHtml || ""));
+      } else {
+        await openEmailAndApplyTemplateOnPage(String(pending.subject || ""), String(pending.body || ""), String(pending.bodyHtml || ""));
+      }
+      clearPendingInlineEmailApply();
+    } catch (_error) {
+      clearPendingInlineEmailApply();
+    } finally {
+      inlineQuickActionsState.pendingEmailApplyRunning = false;
+    }
   }
 
   async function applyInlineNoteTemplate(template) {
@@ -3501,7 +3639,59 @@
     const filledBody = applyInlineTemplateTokens(template?.body || "", tokens).trim();
     const noteBody = htmlToPlainText(filledBody) || filledBody;
     if (!noteBody) throw new Error("Selected note template is empty.");
-    await createNoteOnPage(noteBody);
+
+    const existingEditor = findNoteEditor();
+    if (existingEditor && getNoteComposerRoot(existingEditor)) {
+      await createNoteOnPage(noteBody);
+      return;
+    }
+
+    const interactionUrl = buildCurrentContactInteractionUrl("note");
+    if (!interactionUrl) {
+      await createNoteOnPage(noteBody);
+      return;
+    }
+
+    savePendingInlineNoteApply({
+      recordId: context.recordId,
+      noteBody,
+      createdAt: Date.now()
+    });
+    location.assign(interactionUrl);
+  }
+
+  async function runPendingInlineNoteApplyIfNeeded() {
+    if (inlineQuickActionsState.pendingNoteApplyRunning) return;
+
+    const pending = loadPendingInlineNoteApply();
+    if (!pending) return;
+
+    const currentRecordId = getRecordIdFromPath();
+    if (!currentRecordId || String(pending.recordId || "") !== String(currentRecordId)) {
+      clearPendingInlineNoteApply();
+      return;
+    }
+
+    if (Date.now() - Number(pending.createdAt || 0) > 2 * 60 * 1000) {
+      clearPendingInlineNoteApply();
+      return;
+    }
+
+    inlineQuickActionsState.pendingNoteApplyRunning = true;
+    try {
+      for (let attempt = 0; attempt < TIMING.noteComposerOpenAttempts + 4; attempt += 1) {
+        const editor = findNoteEditor();
+        if (editor && getNoteComposerRoot(editor)) break;
+        await sleep(TIMING.noteComposerOpenDelayMs);
+      }
+
+      await createNoteOnPage(String(pending.noteBody || ""));
+      clearPendingInlineNoteApply();
+    } catch (_error) {
+      clearPendingInlineNoteApply();
+    } finally {
+      inlineQuickActionsState.pendingNoteApplyRunning = false;
+    }
   }
 
   async function applyInlineWhatsappTemplate(template) {
@@ -3995,6 +4185,8 @@
     mountInlineQuickActions();
     setInlineQuickActionsStatus("");
     void refreshInlineQuickActionsData();
+    void runPendingInlineEmailApplyIfNeeded();
+    void runPendingInlineNoteApplyIfNeeded();
   }
 
   function handleInlineQuickActionsViewportResize() {
