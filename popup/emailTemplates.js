@@ -161,6 +161,31 @@
     };
   }
 
+  async function hydrateTemplateContactFromTab(tabId, fallbackContact) {
+    const numericTabId = Number(tabId || 0);
+    if (!numericTabId) return fallbackContact;
+    try {
+      const contextResponse = await requestContactContextForTabId(numericTabId);
+      if (contextResponse?.contact) {
+        return mergeContactValues(fallbackContact, contextResponse.contact);
+      }
+    } catch (_error) {
+      // Keep the popup contact data when the page context is not reachable.
+    }
+    return fallbackContact;
+  }
+
+  function renderEmailTemplatePayload(template, contact) {
+    const tokens = App.getContactTokenMap(contact);
+    const escapedHtmlTokens = Object.fromEntries(
+      Object.entries(tokens).map(([tokenKey, tokenValue]) => [tokenKey, App.escapeHtml(tokenValue)])
+    );
+    const subject = App.applyTokens(template.subject, tokens).trim();
+    const bodyHtml = App.applyTokens(template.body, escapedHtmlTokens).trim();
+    const body = htmlToPlainText(bodyHtml);
+    return { subject, body, bodyHtml };
+  }
+
   function renderTemplateSourceBadge(template) {
     if (template?.source !== "cloud") return "";
     return `<span class='template-source-pill cloud' aria-label='Cloud template' title='Cloud template'>☁</span>`;
@@ -903,25 +928,10 @@
       const existingEmailTab = await findOpenEmailInteractionTab(recordId, portalId);
       const existingContactTab = existingEmailTab || (await App.findExistingContactTab(recordId, portalId));
 
-      let templateContact = contact;
-      if (existingContactTab && typeof existingContactTab.id === "number") {
-        try {
-          const contextResponse = await requestContactContextForTabId(existingContactTab.id);
-          if (contextResponse?.contact) {
-            templateContact = mergeContactValues(contact, contextResponse.contact);
-          }
-        } catch (_error) {
-          // Keep the popup contact data when the page context is not reachable.
-        }
-      }
-
-      const tokens = App.getContactTokenMap(templateContact);
-      const escapedHtmlTokens = Object.fromEntries(
-        Object.entries(tokens).map(([tokenKey, tokenValue]) => [tokenKey, App.escapeHtml(tokenValue)])
-      );
-      const subject = App.applyTokens(template.subject, tokens).trim();
-      const bodyHtml = App.applyTokens(template.body, escapedHtmlTokens).trim();
-      const body = htmlToPlainText(bodyHtml);
+      let templateContact = existingContactTab && typeof existingContactTab.id === "number"
+        ? await hydrateTemplateContactFromTab(existingContactTab.id, contact)
+        : contact;
+      let { subject, body, bodyHtml } = renderEmailTemplatePayload(template, templateContact);
       if (!subject && !body && !bodyHtml) {
         App.setStatus(`Template "${template.name}" is empty.`);
         return;
@@ -942,6 +952,8 @@
           await chrome.tabs.update(existingEmailTab.id, { active: true });
           await App.waitForTabComplete(existingEmailTab.id);
           await App.sleep(timing.emailComposerReadyDelayMs);
+          templateContact = await hydrateTemplateContactFromTab(existingEmailTab.id, templateContact);
+          ({ subject, body, bodyHtml } = renderEmailTemplatePayload(template, templateContact));
           response = await sendApplyMessage(existingEmailTab.id);
           if (!response?.ok) {
             response = await chrome.tabs.sendMessage(existingEmailTab.id, {
@@ -962,6 +974,8 @@
             await App.waitForTabComplete(existingContactTab.id);
             await App.sleep(timing.contactTabPostLoadDelayMs);
             await App.sleep(timing.emailComposerReadyDelayMs);
+            templateContact = await hydrateTemplateContactFromTab(existingContactTab.id, templateContact);
+            ({ subject, body, bodyHtml } = renderEmailTemplatePayload(template, templateContact));
             response = await chrome.tabs.sendMessage(existingContactTab.id, {
               type: MT.OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE,
               subject,
@@ -979,6 +993,8 @@
           async (tabId) => {
             await chrome.tabs.update(tabId, { active: true });
             await App.sleep(timing.emailComposerReadyDelayMs);
+            templateContact = await hydrateTemplateContactFromTab(tabId, templateContact);
+            ({ subject, body, bodyHtml } = renderEmailTemplatePayload(template, templateContact));
             return chrome.tabs.sendMessage(tabId, {
               type: MT.OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE,
               subject,
