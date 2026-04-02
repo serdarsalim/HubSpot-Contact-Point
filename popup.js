@@ -39,6 +39,8 @@
       const target = event.target;
       if (!(target instanceof HTMLInputElement)) return;
       state.emailTemplatesShowCloud = target.checked;
+      state.settings.emailTemplatesShowCloud = target.checked;
+      void App.persistSyncSettings(state.settings);
       App.renderEmailTemplatesPage();
     });
   }
@@ -72,6 +74,8 @@
       const target = event.target;
       if (!(target instanceof HTMLInputElement)) return;
       state.whatsappTemplatesShowCloud = target.checked;
+      state.settings.whatsappTemplatesShowCloud = target.checked;
+      void App.persistSyncSettings(state.settings);
       App.renderWhatsappTemplatesPage();
     });
   }
@@ -105,6 +109,8 @@
       const target = event.target;
       if (!(target instanceof HTMLInputElement)) return;
       state.noteTemplatesShowCloud = target.checked;
+      state.settings.noteTemplatesShowCloud = target.checked;
+      void App.persistSyncSettings(state.settings);
       App.renderNoteTemplatesPage();
     });
   }

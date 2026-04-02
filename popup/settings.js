@@ -367,6 +367,7 @@
         ? String(cloudAuthTokenDrafts[auth.organizationId] || "")
         : String(auth.apiToken || "");
       const showSave = isCloudAuthTokenDirty(auth.organizationId);
+      const isPaused = auth.templatesPaused === true;
       const syncedAt = formatCloudSyncLabel(state.cloud.meta);
       return `
         <div class="cloud-auth-card" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">
@@ -383,9 +384,21 @@
                 autocomplete="off"
               />
               <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" ${showSave ? "" : "hidden"}>Save</button>
+              <button
+                class="btn cloud-toggle-templates-btn"
+                type="button"
+                data-cloud-toggle-templates-btn="true"
+                data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
+                aria-label="${isPaused ? "Start team templates" : "Pause team templates"}"
+                title="${isPaused ? "Start team templates" : "Pause team templates"}"
+              ><span class="cloud-toggle-icon" aria-hidden="true">${
+                isPaused
+                  ? '<svg viewBox="0 0 16 16" focusable="false"><path d="M5 3.5 12 8l-7 4.5z"></path></svg>'
+                  : '<svg viewBox="0 0 16 16" focusable="false"><rect x="4" y="3.5" width="2.5" height="9" rx="1"></rect><rect x="9.5" y="3.5" width="2.5" height="9" rx="1"></rect></svg>'
+              }</span></button>
               <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Refresh templates" title="Refresh templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
               <button class="btn cloud-remove-btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Remove org key" title="Remove org key">X</button>
-              <span class="cloud-sync-label">Last sync: ${App.escapeHtml(syncedAt)}</span>
+              <span class="cloud-sync-label">${isPaused ? "Paused" : `Synced: ${App.escapeHtml(syncedAt)}`}</span>
             </div>
           </div>
         </div>
@@ -547,9 +560,11 @@
         organizationName: orgLabel
       }));
       const meta = cache[cacheKeys.metaKey] && typeof cache[cacheKeys.metaKey] === "object" ? cache[cacheKeys.metaKey] : null;
-      mergedEmail.push(...emailTemplates);
-      mergedWhatsapp.push(...whatsappTemplates);
-      mergedNote.push(...noteTemplates);
+      if (auth.templatesPaused !== true) {
+        mergedEmail.push(...emailTemplates);
+        mergedWhatsapp.push(...whatsappTemplates);
+        mergedNote.push(...noteTemplates);
+      }
       if (meta) {
         metaByOrg[auth.organizationId] = meta;
         const syncAt = String(meta?.lastFullSyncAt || "");
@@ -1196,10 +1211,10 @@
     }
 
     const targets = targetOrgId
-      ? authList.filter((item) => item.organizationId === targetOrgId)
-      : authList.slice();
+      ? authList.filter((item) => item.organizationId === targetOrgId && item.templatesPaused !== true)
+      : authList.filter((item) => item.templatesPaused !== true);
     if (!targets.length) {
-      return { ok: false, error: "missing_org_connection" };
+      return { ok: true, results: [] };
     }
 
     const results = [];
@@ -1211,6 +1226,7 @@
           organizationId: me?.organization?.id,
           organizationName: me?.organization?.name,
           organizationSlug: me?.organization?.slug,
+          templatesPaused: auth.templatesPaused === true,
           tokenPrefix: me?.token?.prefix,
           updatedAt: new Date().toISOString()
         });
@@ -1365,6 +1381,7 @@
         organizationId: me?.organization?.id,
         organizationName: me?.organization?.name,
         organizationSlug: me?.organization?.slug,
+        templatesPaused: findCloudAuthByOrgId(target)?.templatesPaused === true,
         tokenPrefix: me?.token?.prefix,
         updatedAt: new Date().toISOString()
       });
@@ -1469,13 +1486,39 @@
     }
   }
 
+  async function toggleCloudTemplatesPaused(organizationIdInput) {
+    const organizationId = String(organizationIdInput || "").trim();
+    if (!organizationId) return;
+    const current = findCloudAuthByOrgId(organizationId);
+    if (!current) return;
+
+    state.cloud.authList = normalizeCloudAuthList(
+      (state.cloud.authList || []).map((item) =>
+        item.organizationId === organizationId
+          ? {
+              ...item,
+              templatesPaused: item.templatesPaused !== true,
+              updatedAt: new Date().toISOString()
+            }
+          : item
+      )
+    );
+
+    await persistCloudAuthState();
+    await loadCloudCacheFromStorage();
+    rerenderTemplateViewsForCloudChange();
+
+    const next = findCloudAuthByOrgId(organizationId);
+    App.setStatus(next?.templatesPaused ? "Team templates paused." : "Team templates started.");
+  }
+
   async function refreshCloudTemplatesSessionCheck() {
     await refreshCloudTemplates({ force: false, showToast: false, silent: true });
   }
 
   async function onCloudAuthCardsClick(event) {
     const target = event?.target;
-    if (!(target instanceof HTMLElement)) return;
+    if (!(target instanceof Element)) return;
 
     const connectBtn = target.closest("[data-cloud-connect-btn]");
     if (connectBtn instanceof HTMLElement) {
@@ -1489,6 +1532,13 @@
     if (refreshBtn instanceof HTMLElement) {
       const orgId = String(refreshBtn.getAttribute("data-cloud-auth-org-id") || "").trim();
       await refreshCloudTemplatesNow(orgId);
+      return;
+    }
+
+    const toggleBtn = target.closest("[data-cloud-toggle-templates-btn]");
+    if (toggleBtn instanceof HTMLElement) {
+      const orgId = String(toggleBtn.getAttribute("data-cloud-auth-org-id") || "").trim();
+      await toggleCloudTemplatesPaused(orgId);
       return;
     }
 
@@ -1964,6 +2014,12 @@
     };
     state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled !== false;
     state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
+    state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud === true;
+    state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud === true;
+    state.settings.noteTemplatesShowCloud = state.settings.noteTemplatesShowCloud === true;
+    state.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud;
+    state.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud;
+    state.noteTemplatesShowCloud = state.settings.noteTemplatesShowCloud;
     const migratedList = normalizeCloudAuthList(savedCloudAuthList);
     const legacyAuth = App.normalizeCloudAuth(savedCloudAuth);
     state.cloud.authList = migratedList.length ? migratedList : legacyAuth ? [legacyAuth] : [];

@@ -223,6 +223,9 @@
     noteTemplate: "",
     rowFilterWord: "",
     inlineQuickActionsEnabled: true,
+    emailTemplatesShowCloud: false,
+    whatsappTemplatesShowCloud: false,
+    noteTemplatesShowCloud: false,
     visibleColumns: {},
     columnWidths: {},
     columnOrder: [],
@@ -530,6 +533,7 @@
       organizationId,
       organizationName: String(raw.organizationName || "").trim(),
       organizationSlug: String(raw.organizationSlug || "").trim(),
+      templatesPaused: raw.templatesPaused === true,
       tokenPrefix: String(raw.tokenPrefix || "").trim(),
       updatedAt: String(raw.updatedAt || "").trim() || new Date().toISOString()
     };
