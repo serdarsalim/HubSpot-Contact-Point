@@ -2470,28 +2470,7 @@
 
     const element = node;
     if (!(element instanceof Element)) return false;
-    if (element.classList.contains("hs-signature")) return true;
-    if (element.getAttribute("contenteditable") === "false") return true;
-
-    const hint = cleanText(
-      [
-        element.className || "",
-        element.getAttribute("data-test-id") || "",
-        element.getAttribute("data-testid") || "",
-        element.getAttribute("data-selenium-test") || "",
-        element.getAttribute("aria-label") || "",
-        element.getAttribute("title") || ""
-      ].join(" ")
-    ).toLowerCase();
-
-    return (
-      hint.includes("attachment") ||
-      hint.includes("attach") ||
-      hint.includes("file") ||
-      hint.includes("document") ||
-      hint.includes("image") ||
-      hint.includes("preview")
-    );
+    return element.classList.contains("hs-signature");
   }
 
   function clearEditorContentPreservingEmbeds(editor) {
