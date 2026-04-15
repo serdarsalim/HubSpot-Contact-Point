@@ -2643,6 +2643,43 @@
     }
   }
 
+  async function clearOpenEmailComposerOnPage() {
+    const dialog = findOpenEmailDialog();
+    if (!dialog) {
+      throw new Error("Open a HubSpot Email composer first.");
+    }
+
+    const subjectInput = await waitForSubjectInput(dialog, 4, 120);
+    if (subjectInput) {
+      setInputValue(subjectInput, "");
+    }
+
+    const bodyEditors = getBodyEditorCandidates(dialog);
+    let clearedBody = false;
+    for (const bodyEditor of bodyEditors) {
+      if (clearEditorContentPreservingEmbeds(bodyEditor)) {
+        clearedBody = true;
+        break;
+      }
+    }
+
+    if (!clearedBody) {
+      const fallbackEditor = findBodyEditor(dialog);
+      if (fallbackEditor) {
+        clearedBody = clearEditorContentPreservingEmbeds(fallbackEditor);
+      }
+    }
+
+    if (subjectInput instanceof Element) {
+      subjectInput.focus();
+    } else {
+      const editor = findBodyEditor(dialog);
+      editor?.focus?.();
+    }
+
+    return { ok: true };
+  }
+
   function clickEmailComposerTrigger() {
     const triggers = getEmailComposerTriggers();
     if (!triggers.length) return false;
@@ -4278,6 +4315,10 @@
     if (!targetKind) return;
 
     if (targetKind === "email") {
+      if (findOpenEmailDialog()) {
+        await clearOpenEmailComposerOnPage();
+        return;
+      }
       const interactionUrl = buildCurrentContactInteractionUrl("email");
       if (!interactionUrl) {
         throw new Error("Could not open the HubSpot Email composer.");
