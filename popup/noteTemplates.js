@@ -267,8 +267,8 @@
     const nextReadOnly = !!readOnly;
     if (dom.noteTemplateNameInput) dom.noteTemplateNameInput.disabled = nextReadOnly;
     const tinyEditor = getTinyNoteBodyEditor();
-    if (tinyEditor) {
-      tinyEditor.setMode(nextReadOnly ? "readonly" : "design");
+    if (tinyEditor?.mode?.set) {
+      tinyEditor.mode.set(nextReadOnly ? "readonly" : "design");
     } else if (dom.noteTemplateBodyInput) {
       dom.noteTemplateBodyInput.readOnly = nextReadOnly;
       dom.noteTemplateBodyInput.disabled = nextReadOnly;

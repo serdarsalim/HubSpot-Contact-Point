@@ -2728,28 +2728,8 @@
     return normalized;
   }
 
-  function isInlinePlaceholderTemplate(template, kind) {
-    const templateId = cleanText(template?.id || "");
-    const templateName = cleanText(template?.name || "");
-    const normalizedKind = cleanText(kind || "");
-
-    if (templateId === "template_default" || templateId === "wa_template_default" || templateId === "note_template_default") {
-      return true;
-    }
-
-    if (templateName !== "template 1") return false;
-
-    if (normalizedKind === "email") {
-      return cleanText(template?.subject || "") === "" && cleanText(template?.body || "") === "hi [name],";
-    }
-    if (normalizedKind === "whatsapp") {
-      return cleanText(template?.body || "") === "hi [name],";
-    }
-    if (normalizedKind === "note") {
-      return cleanText(template?.body || "") === "";
-    }
-
-    return false;
+  function isInlinePlaceholderTemplate(template) {
+    return cleanText(template?.name || "") === "Template 1";
   }
 
   function filterInlineTemplates(templates, kind) {
