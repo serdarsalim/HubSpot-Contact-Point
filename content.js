@@ -4171,11 +4171,12 @@
     setInlineQuickActionsStatus("Working...");
     try {
       if (kind === "email") {
+        const emailAlreadyOpen = !!findOpenEmailDialog();
         await applyInlineEmailTemplate(template);
         markInlineTemplateUsed("email", template.id);
         void trackInlineCloudTemplateUse(template);
         setInlineQuickActionsStatus("");
-        renderInlineQuickActionsPanel("email");
+        renderInlineQuickActionsPanel(emailAlreadyOpen ? "email" : "");
       } else if (kind === "note") {
         await applyInlineNoteTemplate(template);
         markInlineTemplateUsed("note", template.id);
