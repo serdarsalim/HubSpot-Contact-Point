@@ -256,9 +256,7 @@
     dom.whatsappTemplateBodyInput.addEventListener("blur", () => void App.flushWhatsappTemplateAutosave({ showToast: false }));
   if (dom.deleteNoteTemplateBtn) dom.deleteNoteTemplateBtn.addEventListener("click", App.deleteActiveNoteTemplateDraft);
   if (dom.noteTemplateNameInput) dom.noteTemplateNameInput.addEventListener("input", App.upsertActiveNoteTemplateFromForm);
-  if (dom.noteTemplateBodyInput) dom.noteTemplateBodyInput.addEventListener("input", App.upsertActiveNoteTemplateFromForm);
   if (dom.noteTemplateNameInput) dom.noteTemplateNameInput.addEventListener("blur", () => void App.flushNoteTemplateAutosave({ showToast: false }));
-  if (dom.noteTemplateBodyInput) dom.noteTemplateBodyInput.addEventListener("blur", () => void App.flushNoteTemplateAutosave({ showToast: false }));
 
   if (dom.notesOverlay) {
     dom.notesOverlay.addEventListener("click", (event) => {

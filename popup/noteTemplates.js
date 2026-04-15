@@ -2,11 +2,104 @@
   const App = window.PopupApp;
   const { dom, state, constants } = App;
   const AUTOSAVE_DELAY_MS = 900;
+  const NOTE_BODY_EDITOR_ID = "noteTemplateBodyInput";
+  const NOTE_TINYMCE_TOOLBAR_ORDER = [
+    "blocks",
+    "bold italic underline strikethrough",
+    "bullist numlist",
+    "forecolor backcolor",
+    "alignleft aligncenter alignright",
+    "removeformat",
+    "undo redo"
+  ].join(" | ");
   let autosaveTimerId = null;
   let autosaveInFlight = false;
   let autosaveQueued = false;
   let lastSavedDraftSignature = "";
   let draggedNoteTemplateId = "";
+  let noteBodyEditorInitPromise = null;
+  let tinyNoteEditorUnavailable = false;
+
+  function toNoteEditorHtml(value) {
+    const raw = String(value || "");
+    if (!raw) return "";
+    if (/<[a-z][\s\S]*>/i.test(raw)) return raw;
+    return App.escapeHtml(raw).replace(/\n/g, "<br>");
+  }
+
+  function getTinyNoteBodyEditor() {
+    const tiny = window.tinymce;
+    if (!tiny || typeof tiny.get !== "function") return null;
+    return tiny.get(NOTE_BODY_EDITOR_ID) || null;
+  }
+
+  function readNoteBodyValueFromForm() {
+    const editor = getTinyNoteBodyEditor();
+    if (editor) {
+      const text = String(editor.getContent({ format: "text" }) || "").trim();
+      if (!text) return "";
+      return String(editor.getContent({ format: "html" }) || "").trim();
+    }
+    return String(dom.noteTemplateBodyInput?.value || "").trim();
+  }
+
+  function writeNoteBodyValueToForm(value) {
+    const next = String(value || "");
+    const editor = getTinyNoteBodyEditor();
+    if (editor) {
+      const nextHtml = toNoteEditorHtml(next);
+      const currentHtml = String(editor.getContent({ format: "html" }) || "").trim();
+      if (currentHtml !== nextHtml.trim()) editor.setContent(nextHtml);
+      return;
+    }
+    if (dom.noteTemplateBodyInput) dom.noteTemplateBodyInput.value = next;
+  }
+
+  function ensureNoteBodyEditor() {
+    if (tinyNoteEditorUnavailable) return Promise.resolve(null);
+    const tiny = window.tinymce;
+    if (!tiny || typeof tiny.init !== "function") {
+      tinyNoteEditorUnavailable = true;
+      return Promise.resolve(null);
+    }
+    const existing = getTinyNoteBodyEditor();
+    if (existing) return Promise.resolve(existing);
+    if (noteBodyEditorInitPromise) return noteBodyEditorInitPromise;
+    noteBodyEditorInitPromise = tiny
+      .init({
+        selector: `#${NOTE_BODY_EDITOR_ID}`,
+        license_key: "gpl",
+        menubar: false,
+        statusbar: false,
+        branding: false,
+        promotion: false,
+        resize: false,
+        plugins: "lists",
+        toolbar: NOTE_TINYMCE_TOOLBAR_ORDER,
+        skin: "oxide",
+        content_css: "default",
+        setup(editor) {
+          editor.on("change input undo redo keyup", () => {
+            if (state.syncingNoteTemplateForm) return;
+            upsertActiveNoteTemplateFromForm();
+          });
+          editor.on("blur", () => {
+            void flushNoteTemplateAutosave({ showToast: false });
+          });
+        }
+      })
+      .then((editors) => {
+        const editor = Array.isArray(editors) ? editors[0] || null : null;
+        noteBodyEditorInitPromise = null;
+        return editor;
+      })
+      .catch(() => {
+        tinyNoteEditorUnavailable = true;
+        noteBodyEditorInitPromise = null;
+        return null;
+      });
+    return noteBodyEditorInitPromise;
+  }
 
   function renderTemplateSourceBadge(template) {
     if (template?.source !== "cloud") return "";
@@ -173,7 +266,10 @@
   function setNoteEditorReadOnly(readOnly) {
     const nextReadOnly = !!readOnly;
     if (dom.noteTemplateNameInput) dom.noteTemplateNameInput.disabled = nextReadOnly;
-    if (dom.noteTemplateBodyInput) {
+    const tinyEditor = getTinyNoteBodyEditor();
+    if (tinyEditor) {
+      tinyEditor.setMode(nextReadOnly ? "readonly" : "design");
+    } else if (dom.noteTemplateBodyInput) {
       dom.noteTemplateBodyInput.readOnly = nextReadOnly;
       dom.noteTemplateBodyInput.disabled = nextReadOnly;
     }
@@ -301,7 +397,7 @@
 
     state.syncingNoteTemplateForm = true;
     if (dom.noteTemplateNameInput) dom.noteTemplateNameInput.value = active.name || "";
-    if (dom.noteTemplateBodyInput) dom.noteTemplateBodyInput.value = active.body || "";
+    writeNoteBodyValueToForm(active.body || "");
     state.syncingNoteTemplateForm = false;
     setNoteEditorReadOnly(activeIsCloud);
   }
@@ -318,7 +414,7 @@
     if (!active) return;
 
     active.name = String(dom.noteTemplateNameInput?.value || "").trim() || "Untitled";
-    active.body = String(dom.noteTemplateBodyInput?.value || "").trim();
+    active.body = readNoteBodyValueFromForm();
     renderNoteTemplatesList();
     scheduleNoteTemplateAutosave();
   }
@@ -394,6 +490,7 @@
     deleteActiveNoteTemplateDraft,
     flushNoteTemplateAutosave,
     renderNotesTemplateSelectOptions,
-    applySelectedNoteTemplateToInput
+    applySelectedNoteTemplateToInput,
+    ensureNoteBodyEditor
   });
 })();

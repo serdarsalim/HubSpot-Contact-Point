@@ -1086,6 +1086,11 @@
     state.noteTemplatesSearchQuery = "";
     App.loadNoteTemplatesDraftFromSettings();
     App.renderNoteTemplatesPage();
+    if (typeof App.ensureNoteBodyEditor === "function") {
+      void App.ensureNoteBodyEditor().then(() => {
+        App.renderActiveNoteTemplateEditor();
+      });
+    }
   }
 
   function closeNoteSettings() {
