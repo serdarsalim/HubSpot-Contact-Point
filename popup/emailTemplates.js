@@ -52,23 +52,29 @@
   }
 
   function scoreEmailTemplateSearchMatch(template, query) {
-    const normalizedQuery = App.normalizeSearchText(query || "");
-    if (!normalizedQuery) return 0;
+    const queryTokens = App.normalizeSearchTokens(query || "");
+    const normalizedQuery = queryTokens.join(" ");
+    if (!queryTokens.length) return 0;
 
     const name = App.normalizeSearchText(template?.name || "");
     const subject = App.normalizeSearchText(template?.subject || "");
     const nameWords = name.split(/\s+/).filter(Boolean);
     const subjectWords = subject.split(/\s+/).filter(Boolean);
+    const combinedText = `${name} ${subject}`.trim();
+
+    if (!App.searchTextMatchesQuery(combinedText, queryTokens)) return 0;
 
     if (name === normalizedQuery) return 1000;
     if (subject === normalizedQuery) return 700;
     if (name.startsWith(normalizedQuery)) return 450;
     if (subject.startsWith(normalizedQuery)) return 260;
+    if (App.searchTextMatchesQuery(name, queryTokens)) return 220;
+    if (App.searchTextMatchesQuery(subject, queryTokens)) return 140;
     if (nameWords.includes(normalizedQuery)) return 220;
     if (subjectWords.includes(normalizedQuery)) return 140;
     if (name.includes(normalizedQuery)) return 120;
     if (subject.includes(normalizedQuery)) return 80;
-    return 0;
+    return 60;
   }
 
   function rankEmailTemplatesForQuery(templates, query) {
@@ -617,9 +623,7 @@
     return templates.filter((template) => {
       if (!showCloud && template?.source === "cloud") return false;
       if (!query) return true;
-      const name = App.normalizeSearchText(template?.name || "");
-      const subject = App.normalizeSearchText(template?.subject || "");
-      return name.includes(query) || subject.includes(query);
+      return App.searchTextMatchesQuery(`${template?.name || ""} ${template?.subject || ""}`, query);
     });
   }
 

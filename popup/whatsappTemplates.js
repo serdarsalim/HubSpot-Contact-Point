@@ -134,8 +134,7 @@
     return templates.filter((template) => {
       if (!showCloud && template?.source === "cloud") return false;
       if (!query) return true;
-      const name = App.normalizeSearchText(template?.name || "");
-      return name.includes(query);
+      return App.searchTextMatchesQuery(template?.name || "", query);
     });
   }
 
@@ -349,8 +348,7 @@
     const query = App.normalizeSearchText(state.whatsappTemplatePickState?.query || "");
     const matchingTemplates = query
       ? templates.filter((template) => {
-          const name = App.normalizeSearchText(template?.name || "");
-          return name.includes(query);
+          return App.searchTextMatchesQuery(template?.name || "", query);
         })
       : templates;
     if (!templates.length) {

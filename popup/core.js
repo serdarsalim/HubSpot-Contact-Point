@@ -626,6 +626,21 @@
       .trim();
   }
 
+  function normalizeSearchTokens(value) {
+    return normalizeSearchText(value)
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0);
+  }
+
+  function searchTextMatchesQuery(text, query) {
+    const normalizedText = normalizeSearchText(text);
+    const tokens = Array.isArray(query) ? query.map((token) => normalizeSearchText(token)).filter(Boolean) : normalizeSearchTokens(query);
+    if (!tokens.length) return true;
+    if (!normalizedText) return false;
+    return tokens.every((token) => normalizedText.includes(token));
+  }
+
   function findCloudAuthByOrganizationId(organizationIdInput) {
     const organizationId = String(organizationIdInput || "").trim();
     if (!organizationId) return null;
@@ -789,7 +804,7 @@
   }
 
   function getContactSearchQuery() {
-    return String(state.contactsSearchQuery || "").trim().toLowerCase();
+    return normalizeSearchText(state.contactsSearchQuery || "");
   }
 
   function getFilteredContacts(source = state.currentContacts) {
@@ -801,7 +816,7 @@
       const rowText = Object.values(contact.values || {}).join(" ").toLowerCase();
       if (filterWords.some((word) => rowText.includes(word))) return false;
       if (!searchQuery) return true;
-      return rowText.includes(searchQuery);
+      return searchTextMatchesQuery(rowText, searchQuery);
     });
   }
 
@@ -1340,7 +1355,7 @@
       ? options.filter((option) => {
           const code = String(option?.value || "").replace(/\D/g, "");
           const label = String(option?.textContent || "").toLowerCase();
-          return label.includes(query) || code.includes(query);
+          return searchTextMatchesQuery(`${label} ${code}`, query);
         })
       : options;
 
@@ -1558,6 +1573,8 @@
     getMergedNoteTemplates,
     templateTokenKey,
     normalizeSearchText,
+    normalizeSearchTokens,
+    searchTextMatchesQuery,
     findCloudAuthByOrganizationId,
     trackCloudTemplateUse,
     applyTokens,

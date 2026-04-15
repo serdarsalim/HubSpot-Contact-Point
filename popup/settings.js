@@ -786,8 +786,7 @@
     const allOptions = [{ name: "Not set", code: "" }, ...COUNTRY_PREFIX_OPTIONS];
     const filtered = query
       ? allOptions.filter((item) => {
-          const label = `${item.name} ${item.code}`.toLowerCase();
-          return label.includes(query);
+          return App.searchTextMatchesQuery(`${item.name || ""} ${item.code || ""}`, query);
         })
       : allOptions;
 

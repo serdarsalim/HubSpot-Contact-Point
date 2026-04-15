@@ -150,9 +150,7 @@
     return templates.filter((template) => {
       if (!showCloud && template?.source === "cloud") return false;
       if (!query) return true;
-      const name = App.normalizeSearchText(template?.name || "");
-      const body = App.normalizeSearchText(template?.body || "");
-      return name.includes(query) || body.includes(query);
+      return App.searchTextMatchesQuery(`${template?.name || ""} ${template?.body || ""}`, query);
     });
   }
 

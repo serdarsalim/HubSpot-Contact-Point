@@ -175,6 +175,21 @@
       .trim();
   }
 
+  function normalizeSearchTokens(text) {
+    return normalizeSearchText(text)
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0);
+  }
+
+  function searchTextMatchesQuery(text, query) {
+    const normalizedText = normalizeSearchText(text);
+    const tokens = Array.isArray(query) ? query.map((token) => normalizeSearchText(token)).filter(Boolean) : normalizeSearchTokens(query);
+    if (!tokens.length) return true;
+    if (!normalizedText) return false;
+    return tokens.every((token) => normalizedText.includes(token));
+  }
+
   function isDashLikePlaceholder(value) {
     const text = cleanText(value);
     if (!text) return false;
@@ -3635,7 +3650,7 @@
     const templates = inlineQuickActionsState.templates?.[inlineQuickActionsState.activeKind] || [];
     const query = normalizeSearchText(inlineQuickActionsState.searchQuery || "");
     const matchingTemplates = query
-      ? templates.filter((template) => normalizeSearchText(template?.name || "").includes(query))
+      ? templates.filter((template) => searchTextMatchesQuery(template?.name || "", query))
       : templates;
     inlineQuickActionsState.panelEl.hidden = false;
     if (!templates.length) {
