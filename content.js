@@ -1916,14 +1916,6 @@
       throw new Error("Could not write content into the note field.");
     }
     await sleep(TIMING.noteEditorSettleDelayMs);
-
-    const createNoteButton = findCreateNoteButton(editor);
-    if (!createNoteButton) {
-      throw new Error("Could not find Create note button.");
-    }
-
-    createNoteButton.click();
-    await sleep(TIMING.noteSaveSettleDelayMs);
     return { ok: true };
   }
 
