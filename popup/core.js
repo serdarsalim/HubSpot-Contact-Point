@@ -192,7 +192,7 @@
   const CLOUD_NOTE_CACHE_PREFIX = "popupCloudNoteTemplates::";
   const CLOUD_META_CACHE_PREFIX = "popupCloudTemplatesMeta::";
   const CLOUD_TEMPLATE_ID_PREFIX = "cloud_";
-  const CLOUD_API_BASE_URL = "https://contactpoint.vercel.app";
+  const CLOUD_API_BASE_URL = String(shared.CLOUD_API_BASE_URL || "https://contactpoint.vercel.app").trim();
   const CLOUD_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const MAX_CLOUD_ORG_CONNECTIONS = 5;
   const SELECTED_KEYS_SESSION_KEY = "popupSelectedContactKeys";

@@ -1,6 +1,8 @@
 (() => {
   const shared = (globalThis.ContactPilotShared = globalThis.ContactPilotShared || {});
 
+  shared.CLOUD_API_BASE_URL = "https://contactpoint.vercel.app";
+
   shared.TIMING = Object.freeze({
     popup: Object.freeze({
       waitForTabCompleteTimeoutMs: 30000,

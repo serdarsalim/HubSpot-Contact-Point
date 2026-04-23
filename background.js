@@ -1,3 +1,5 @@
+importScripts("shared/config.js");
+
 const ATTACHED_POPUP_PATH = "popup.html";
 const DETACHED_POPUP_PATH = "popup.html?mode=detached";
 const ATTACHED_POPUP_URL = chrome.runtime.getURL(ATTACHED_POPUP_PATH);
@@ -8,9 +10,11 @@ const OPEN_POPUP_WINDOW_MESSAGE = "OPEN_POPUP_WINDOW";
 const OPEN_OR_FOCUS_CONTACT_TAB_MESSAGE = "OPEN_OR_FOCUS_CONTACT_TAB";
 const OPEN_OR_REUSE_WHATSAPP_TAB_MESSAGE = "OPEN_OR_REUSE_WHATSAPP_TAB";
 const TRACK_CLOUD_TEMPLATE_USE_MESSAGE = "TRACK_CLOUD_TEMPLATE_USE";
+const shared = globalThis.ContactPilotShared || {};
+const DEFAULT_CLOUD_API_BASE_URL = String(shared.CLOUD_API_BASE_URL || "https://contactpoint.vercel.app").trim();
 
 async function trackCloudTemplateUse(input) {
-  const apiBaseUrl = String(input?.apiBaseUrl || "").trim().replace(/\/+$/g, "");
+  const apiBaseUrl = String(input?.apiBaseUrl || DEFAULT_CLOUD_API_BASE_URL).trim().replace(/\/+$/g, "");
   const apiToken = String(input?.apiToken || "").trim();
   const templateId = String(input?.templateId || "").trim();
   if (!apiBaseUrl) {

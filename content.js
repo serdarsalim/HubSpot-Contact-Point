@@ -38,6 +38,7 @@
   const CLOUD_WHATSAPP_CACHE_PREFIX = "popupCloudWhatsappTemplates::";
   const CLOUD_NOTE_CACHE_PREFIX = "popupCloudNoteTemplates::";
   const CLOUD_TEMPLATE_ID_PREFIX = "cloud_";
+  const CLOUD_API_BASE_URL = cleanText(shared.CLOUD_API_BASE_URL || "https://contactpoint.vercel.app");
   const INLINE_QUICK_ACTIONS_ROOT_ID = "cpInlineQuickActionsRoot";
   const PENDING_INLINE_EMAIL_APPLY_SESSION_KEY = "cpPendingInlineEmailApply";
   const PENDING_INLINE_NOTE_APPLY_SESSION_KEY = "cpPendingInlineNoteApply";
@@ -2719,7 +2720,7 @@
       normalized.push({
         organizationId,
         apiToken: cleanText(item?.apiToken || ""),
-        apiBaseUrl: cleanText(item?.apiBaseUrl || ""),
+        apiBaseUrl: cleanText(item?.apiBaseUrl || "") || CLOUD_API_BASE_URL,
         organizationName: cleanText(item?.organizationName || ""),
         organizationSlug: cleanText(item?.organizationSlug || ""),
         templatesPaused: item?.templatesPaused === true
