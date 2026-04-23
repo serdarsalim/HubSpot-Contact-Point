@@ -371,7 +371,7 @@
           <div class="cloud-auth-card-head">
             <strong>${App.escapeHtml(orgName)}</strong>
             <div class="cloud-token-row">
-              <span class="cloud-token-display" title="Click to copy" data-cloud-token-copy="${App.escapeHtml(apiToken)}">${App.escapeHtml(apiToken.slice(-8))}</span>
+              <span class="cloud-token-display" title="Click to copy" data-cloud-token-copy="${App.escapeHtml(apiToken)}">${App.escapeHtml(apiToken.split("_")[1] || apiToken)}</span>
               <button
                 class="btn cloud-toggle-templates-btn"
                 type="button"
