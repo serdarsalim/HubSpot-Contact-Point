@@ -363,28 +363,15 @@
     ensureDefaultPendingCloudRow();
     const authCards = (state.cloud.authList || []).map((auth) => {
       const orgName = auth.organizationName || auth.organizationSlug || auth.organizationId;
-      const currentValue = Object.prototype.hasOwnProperty.call(cloudAuthTokenDrafts, auth.organizationId)
-        ? String(cloudAuthTokenDrafts[auth.organizationId] || "")
-        : String(auth.apiToken || "");
-      const showSave = isCloudAuthTokenDirty(auth.organizationId);
       const isPaused = auth.templatesPaused === true;
       const syncedAt = formatCloudSyncLabel(state.cloud.meta);
-      const tokenPrefix = String(auth.tokenPrefix || "").trim();
+      const apiToken = String(auth.apiToken || "");
       return `
         <div class="cloud-auth-card" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">
           <div class="cloud-auth-card-head">
-            <strong>${App.escapeHtml(orgName)}${tokenPrefix ? ` <span class="cloud-token-prefix">${App.escapeHtml(tokenPrefix)}</span>` : ""}</strong>
+            <strong>${App.escapeHtml(orgName)}</strong>
             <div class="cloud-token-row">
-              <input
-                class="cloud-token-input"
-                type="password"
-                data-cloud-token-input="true"
-                data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
-                value="${App.escapeHtml(currentValue)}"
-                placeholder="Paste team access key"
-                autocomplete="off"
-              />
-              <button class="btn" type="button" data-cloud-connect-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" ${showSave ? "" : "hidden"}>Save</button>
+              <span class="cloud-token-display" title="Click to copy" data-cloud-token-copy="${App.escapeHtml(apiToken)}">${App.escapeHtml(apiToken)}</span>
               <button
                 class="btn cloud-toggle-templates-btn"
                 type="button"
@@ -1524,6 +1511,16 @@
   async function onCloudAuthCardsClick(event) {
     const target = event?.target;
     if (!(target instanceof Element)) return;
+
+    const tokenDisplay = target.closest("[data-cloud-token-copy]");
+    if (tokenDisplay instanceof HTMLElement) {
+      const token = tokenDisplay.getAttribute("data-cloud-token-copy") || "";
+      await navigator.clipboard.writeText(token);
+      const prev = tokenDisplay.textContent;
+      tokenDisplay.textContent = "Copied!";
+      setTimeout(() => { tokenDisplay.textContent = prev; }, 1500);
+      return;
+    }
 
     const connectBtn = target.closest("[data-cloud-connect-btn]");
     if (connectBtn instanceof HTMLElement) {
