@@ -660,12 +660,12 @@
     if (!apiToken || !apiBaseUrl) return false;
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/extension/templates/${encodeURIComponent(cloudId)}/track-use`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${apiToken}`
-        }
+      const response = await chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.TRACK_CLOUD_TEMPLATE_USE,
+        organizationId,
+        apiBaseUrl,
+        apiToken,
+        templateId: cloudId
       });
       return !!response?.ok;
     } catch (_error) {

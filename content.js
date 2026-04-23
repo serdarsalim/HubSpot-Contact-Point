@@ -3107,6 +3107,7 @@
     try {
       const response = await chrome.runtime.sendMessage({
         type: MESSAGE_TYPES.TRACK_CLOUD_TEMPLATE_USE,
+        organizationId,
         apiBaseUrl,
         apiToken,
         templateId: cloudId

@@ -5,6 +5,8 @@ const DETACHED_POPUP_PATH = "popup.html?mode=detached";
 const ATTACHED_POPUP_URL = chrome.runtime.getURL(ATTACHED_POPUP_PATH);
 const DETACHED_POPUP_URL = chrome.runtime.getURL(DETACHED_POPUP_PATH);
 const SETTINGS_KEY = "popupSettings";
+const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
+const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
 const DEFAULT_LAUNCH_MODE = "attached";
 const OPEN_POPUP_WINDOW_MESSAGE = "OPEN_POPUP_WINDOW";
 const OPEN_OR_FOCUS_CONTACT_TAB_MESSAGE = "OPEN_OR_FOCUS_CONTACT_TAB";
@@ -13,9 +15,45 @@ const TRACK_CLOUD_TEMPLATE_USE_MESSAGE = "TRACK_CLOUD_TEMPLATE_USE";
 const shared = globalThis.ContactPilotShared || {};
 const DEFAULT_CLOUD_API_BASE_URL = String(shared.CLOUD_API_BASE_URL || "https://contactpoint.vercel.app").trim();
 
+function normalizeCloudAuthList(rawList, rawPrimary) {
+  const source = [];
+  if (Array.isArray(rawList)) source.push(...rawList);
+  if (rawPrimary && typeof rawPrimary === "object") source.push(rawPrimary);
+
+  const byOrgId = new Map();
+  for (const item of source) {
+    const organizationId = String(item?.organizationId || "").trim();
+    const apiToken = String(item?.apiToken || "").trim();
+    if (!organizationId || !apiToken) continue;
+    byOrgId.set(organizationId, {
+      organizationId,
+      apiToken,
+      apiBaseUrl: String(item?.apiBaseUrl || DEFAULT_CLOUD_API_BASE_URL).trim()
+    });
+  }
+  return Array.from(byOrgId.values());
+}
+
+async function resolveCloudTrackAuth(input) {
+  const organizationId = String(input?.organizationId || "").trim();
+  if (organizationId) {
+    const stored = await chrome.storage.local.get([CLOUD_AUTH_LIST_LOCAL_KEY, CLOUD_AUTH_LOCAL_KEY]);
+    const authList = normalizeCloudAuthList(stored?.[CLOUD_AUTH_LIST_LOCAL_KEY], stored?.[CLOUD_AUTH_LOCAL_KEY]);
+    const matched = authList.find((item) => item.organizationId === organizationId);
+    if (matched) return matched;
+  }
+
+  return {
+    organizationId,
+    apiToken: String(input?.apiToken || "").trim(),
+    apiBaseUrl: String(input?.apiBaseUrl || DEFAULT_CLOUD_API_BASE_URL).trim()
+  };
+}
+
 async function trackCloudTemplateUse(input) {
-  const apiBaseUrl = String(input?.apiBaseUrl || DEFAULT_CLOUD_API_BASE_URL).trim().replace(/\/+$/g, "");
-  const apiToken = String(input?.apiToken || "").trim();
+  const auth = await resolveCloudTrackAuth(input);
+  const apiBaseUrl = String(auth.apiBaseUrl || DEFAULT_CLOUD_API_BASE_URL).trim().replace(/\/+$/g, "");
+  const apiToken = String(auth.apiToken || "").trim();
   const templateId = String(input?.templateId || "").trim();
   if (!apiBaseUrl) {
     throw new Error("Cloud API base URL is missing.");
