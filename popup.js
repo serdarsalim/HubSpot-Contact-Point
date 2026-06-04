@@ -22,6 +22,21 @@
     dom.cloudAuthCardsEl.addEventListener("input", App.onCloudAuthCardsInput);
   }
   if (dom.cloudTokenInfoBtn) dom.cloudTokenInfoBtn.addEventListener("click", App.openCloudTokenInfoDialog);
+  if (dom.contactWidgetInfoBtn) {
+    dom.contactWidgetInfoBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      App.openContactWidgetInfoDialog();
+    });
+  }
+  if (dom.contactWidgetInfoCloseBtn) {
+    dom.contactWidgetInfoCloseBtn.addEventListener("click", App.closeContactWidgetInfoDialog);
+  }
+  if (dom.contactWidgetInfoOverlay) {
+    dom.contactWidgetInfoOverlay.addEventListener("click", (event) => {
+      if (event.target === dom.contactWidgetInfoOverlay) App.closeContactWidgetInfoDialog();
+    });
+  }
 
   if (dom.addEmailTemplateBtn) {
     dom.addEmailTemplateBtn.addEventListener("click", App.addEmailTemplateDraft);
@@ -336,6 +351,13 @@
     await App.loadSettings();
     if (typeof App.refreshCloudTemplatesSessionCheck === "function") {
       void App.refreshCloudTemplatesSessionCheck();
+    }
+    // Open Settings first so the popup always lands on the Settings page,
+    // even while contacts load in the background. loadContacts can hang
+    // (e.g. no HubSpot contacts tab open); awaiting it before opening
+    // Settings left the popup stuck on the "Loading contacts..." view.
+    if (typeof App.openSettings === "function") {
+      App.openSettings();
     }
     await App.loadContacts({ loadAll: true });
     App.updateStickyHeadOffset();
