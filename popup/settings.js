@@ -378,14 +378,14 @@
                 data-cloud-toggle-templates-btn="true"
                 data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
                 aria-label="${isPaused ? "Start team templates" : "Pause team templates"}"
-                title="${isPaused ? "Start team templates" : "Pause team templates"}"
+                title="${isPaused ? "Resume — show templates from this org" : "Pause — don't show templates from this org"}"
               ><span class="cloud-toggle-icon" aria-hidden="true">${
                 isPaused
                   ? '<svg viewBox="0 0 16 16" focusable="false"><path d="M5 3.5 12 8l-7 4.5z"></path></svg>'
                   : '<svg viewBox="0 0 16 16" focusable="false"><rect x="4" y="3.5" width="2.5" height="9" rx="1"></rect><rect x="9.5" y="3.5" width="2.5" height="9" rx="1"></rect></svg>'
-              }</span></button>
-              <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Refresh templates" title="Refresh templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
-              <button class="btn cloud-remove-btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Remove org key" title="Remove org key">X</button>
+              }</span><span class="cloud-btn-label">${isPaused ? "Resume" : "Pause"}</span></button>
+              <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Refresh templates" title="Refresh — download and sync templates from the cloud"><span class="cloud-refresh-icon" aria-hidden="true">↻</span><span class="cloud-btn-label">Refresh</span></button>
+              <button class="btn cloud-remove-btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Remove org key" title="Remove — disconnect this org key"><span aria-hidden="true">X</span><span class="cloud-btn-label">Remove</span></button>
               <span class="cloud-sync-label">${isPaused ? "Paused" : `Synced: ${App.escapeHtml(syncedAt)}`}</span>
             </div>
           </div>
@@ -417,7 +417,7 @@
     dom.cloudAuthCardsEl.innerHTML = [...authCards, ...pendingCards].join("");
     if (dom.addCloudAuthBtn) {
       dom.addCloudAuthBtn.disabled = !canAddMoreCloudRows();
-      dom.addCloudAuthBtn.textContent = canAddMoreCloudRows() ? "Add more" : "Max 5 org keys";
+      dom.addCloudAuthBtn.textContent = canAddMoreCloudRows() ? "Add another team" : "Max 5 org keys";
       dom.addCloudAuthBtn.hidden = !canShowAddMoreButton();
     }
   }
@@ -432,6 +432,19 @@
     App.blurFocusedElementWithin(dom.cloudTokenInfoOverlay);
     requestAnimationFrame(() => {
       dom.cloudTokenInfoOverlay.classList.remove("open");
+    });
+  }
+
+  function openContactWidgetInfoDialog() {
+    if (!dom.contactWidgetInfoOverlay) return;
+    dom.contactWidgetInfoOverlay.classList.add("open");
+  }
+
+  function closeContactWidgetInfoDialog() {
+    if (!dom.contactWidgetInfoOverlay) return;
+    App.blurFocusedElementWithin(dom.contactWidgetInfoOverlay);
+    requestAnimationFrame(() => {
+      dom.contactWidgetInfoOverlay.classList.remove("open");
     });
   }
 
@@ -2016,9 +2029,9 @@
     };
     state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled !== false;
     state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
-    state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud === true;
-    state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud === true;
-    state.settings.noteTemplatesShowCloud = state.settings.noteTemplatesShowCloud === true;
+    state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud !== false;
+    state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud !== false;
+    state.settings.noteTemplatesShowCloud = state.settings.noteTemplatesShowCloud !== false;
     state.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud;
     state.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud;
     state.noteTemplatesShowCloud = state.settings.noteTemplatesShowCloud;
@@ -2151,6 +2164,8 @@
     closeTemplateImportReview,
     openCloudTokenInfoDialog,
     closeCloudTokenInfoDialog,
+    openContactWidgetInfoDialog,
+    closeContactWidgetInfoDialog,
     applyTemplateImport,
     renderCloudConnectionStatus,
     renderCloudAuthCards,

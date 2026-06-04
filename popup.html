@@ -111,6 +111,18 @@
         margin-bottom: 8px;
       }
 
+      html:not([data-launch-mode="detached"]) .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+      }
+
+      html:not([data-launch-mode="detached"]) .title-tools,
+      html:not([data-launch-mode="detached"]) .title-actions {
+        justify-self: auto;
+      }
+
       .sticky-head {
         flex: 0 0 auto;
         padding-top: 8px;
@@ -189,22 +201,35 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 30px;
+        gap: 6px;
+        min-width: 30px;
         height: 30px;
-        padding: 0;
+        padding: 0 8px;
         border: 0;
         background: transparent;
         color: #5a6d82;
         border-radius: 8px;
         cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
         transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+      }
+
+      .title-icon-btn[hidden] {
+        display: none;
       }
 
       .title-icon-btn svg {
         width: 18px;
         height: 18px;
         stroke: currentColor;
+        flex-shrink: 0;
       }
+
+      .title-icon-btn .nav-label {
+        white-space: nowrap;
+      }
+
 
       .title-icon-btn:hover {
         color: var(--brand);
@@ -225,6 +250,11 @@
       .title-icon-btn:focus-visible {
         outline: 2px solid #0b66c3;
         outline-offset: 2px;
+      }
+
+      .title-icon-btn.active:focus-visible,
+      .title-icon-btn:focus:not(:focus-visible) {
+        outline: none;
       }
 
       .icon-btn,
@@ -1372,17 +1402,16 @@
       }
 
       .field label.setting-toggle-card {
-        display: flex;
+        display: grid;
+        grid-template-columns: 210px minmax(0, 320px);
         align-items: center;
-        justify-content: flex-start;
-        gap: 10px;
+        column-gap: 12px;
         margin-bottom: 0;
         cursor: pointer;
       }
 
       .setting-toggle-copy {
         min-width: 0;
-        flex: 0 1 auto;
       }
 
       .setting-toggle-title {
@@ -1509,7 +1538,7 @@
 
       .cloud-auth-card-head {
         display: grid;
-        grid-template-columns: 210px minmax(0, 1fr);
+        grid-template-columns: max-content minmax(0, 1fr);
         align-items: center;
         column-gap: 12px;
         row-gap: 8px;
@@ -1586,8 +1615,6 @@
       }
 
       .cloud-remove-btn {
-        min-width: 42px;
-        padding-inline: 0;
         color: #c0392b;
       }
 
@@ -1602,21 +1629,32 @@
       }
 
       .cloud-refresh-btn {
-        min-width: 42px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        gap: 6px;
       }
 
       .cloud-toggle-templates-btn {
-        min-width: 42px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding-inline: 0;
+        gap: 6px;
         color: #4a617d;
         border-color: #d6e1ed;
         background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
+      }
+
+      .cloud-remove-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .cloud-btn-label {
+        font-size: 12px;
+        font-weight: 600;
       }
 
       .cloud-toggle-templates-btn:hover {
@@ -2026,8 +2064,26 @@
       }
 
       .email-add-template-btn {
+        flex: 0 0 auto;
+        padding: 0 12px;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .template-search-row {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .template-search-row .template-tab-search {
         flex: 1 1 auto;
         min-width: 0;
+        margin-bottom: 0;
+      }
+
+      .template-search-row .email-add-template-btn {
+        align-self: stretch;
       }
 
       .template-cloud-toggle {
@@ -2206,6 +2262,9 @@
         justify-content: flex-end;
         align-items: center;
         gap: 10px;
+        flex: 0 0 auto;
+        align-self: flex-end;
+        padding-bottom: 6px;
       }
 
       .email-template-save-state {
@@ -2771,7 +2830,7 @@
       <div id="stickyHead" class="sticky-head">
         <div class="topbar">
           <div class="title-tools">
-            <button id="contactViewBtn" class="title-icon-btn active" aria-label="Show contacts" title="Show contacts">
+            <button id="contactViewBtn" class="title-icon-btn active" aria-label="Show contacts" title="Show contacts" hidden>
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path>
                 <circle cx="9.5" cy="8" r="3"></circle>
@@ -2784,6 +2843,7 @@
                 <rect x="3" y="5" width="18" height="14" rx="2"></rect>
                 <path d="M3 7l9 6 9-6"></path>
               </svg>
+              <span class="nav-label">Email</span>
             </button>
             <button id="whatsappSettingsBtn" class="title-icon-btn" aria-label="Open WhatsApp templates" title="Open WhatsApp templates">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2792,6 +2852,7 @@
                 <circle cx="12" cy="11.5" r="0.9"></circle>
                 <circle cx="15" cy="11.5" r="0.9"></circle>
               </svg>
+              <span class="nav-label">WhatsApp</span>
             </button>
             <button id="noteSettingsBtn" class="title-icon-btn" aria-label="Open note templates" title="Open note templates">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2800,12 +2861,7 @@
                 <path d="M8 12h8"></path>
                 <path d="M8 16h8"></path>
               </svg>
-            </button>
-            <button id="settingsBtn" class="title-icon-btn" aria-label="Open settings" title="Open settings">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.26.3.45.65.6 1 .08.31.11.63.1.95a2 2 0 0 1 1.9 2.05 2 2 0 0 1-1.9 2.05c.01.32-.02.64-.1.95-.15.35-.34.7-.6 1z"></path>
-              </svg>
+              <span class="nav-label">Notes</span>
             </button>
           </div>
           <div class="title-actions">
@@ -2815,6 +2871,14 @@
                 <path d="M10 14 20 4"></path>
                 <path d="M20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5"></path>
               </svg>
+              <span class="nav-label">Pop out</span>
+            </button>
+            <button id="settingsBtn" class="title-icon-btn" aria-label="Open settings" title="Open settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.26.3.45.65.6 1 .08.31.11.63.1.95a2 2 0 0 1 1.9 2.05 2 2 0 0 1-1.9 2.05c.01.32-.02.64-.1.95-.15.35-.34.7-.6 1z"></path>
+              </svg>
+              <span class="nav-label">Settings</span>
             </button>
             <button id="themeToggleBtn" class="title-icon-btn theme-toggle-btn" aria-label="Switch to dark mode" title="Switch to dark mode">
               <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2824,6 +2888,7 @@
                 <circle cx="12" cy="12" r="4"></circle>
                 <path d="M12 2v2.2M12 19.8V22M4.2 12H2M22 12h-2.2M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6M19.1 19.1l-1.6-1.6M6.5 6.5 4.9 4.9"></path>
               </svg>
+              <span class="nav-label">Dark mode</span>
             </button>
           </div>
         </div>
@@ -2896,33 +2961,22 @@
       <div class="email-templates-shell">
         <aside class="email-templates-sidebar">
           <div class="email-templates-sidebar-head">
-            <div class="email-templates-sidebar-tools">
-              <button id="addEmailTemplateBtn" class="btn primary email-add-template-btn" type="button">Add Email Template</button>
-              <label id="emailCloudToggleWrap" class="template-cloud-toggle" hidden>
-                <span>Cloud</span>
-                <span class="ios-switch">
-                  <input id="emailCloudToggleInput" type="checkbox" role="switch" aria-label="Show cloud email templates" checked />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </span>
-              </label>
+            <div class="template-search-row">
+              <input
+                id="emailTemplatesSearchInput"
+                class="email-template-pick-search template-tab-search"
+                type="search"
+                placeholder="Search templates..."
+                aria-label="Search email templates"
+              />
+              <button id="addEmailTemplateBtn" class="btn primary email-add-template-btn" type="button">+ New</button>
             </div>
-            <input
-              id="emailTemplatesSearchInput"
-              class="email-template-pick-search template-tab-search"
-              type="search"
-              placeholder="Search templates..."
-              aria-label="Search email templates"
-            />
           </div>
           <div id="emailTemplatesList" class="email-templates-list"></div>
         </aside>
         <section class="email-template-editor-pane">
           <div id="emailTemplateEmpty" class="email-template-empty">Select a template from the left or create a new one.</div>
           <div id="emailTemplateEditor" class="email-template-editor" hidden>
-            <div class="email-template-top-actions">
-              <span id="emailTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
-              <button id="deleteEmailTemplateBtn" class="btn danger" type="button">Delete</button>
-            </div>
             <div class="email-template-meta-row">
               <div class="field">
                 <label for="emailTemplateNameInput">Template name</label>
@@ -2931,6 +2985,10 @@
               <div class="field">
                 <label for="emailTemplateSubjectInput">Subject</label>
                 <input id="emailTemplateSubjectInput" type="text" />
+              </div>
+              <div class="email-template-top-actions">
+                <span id="emailTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
+                <button id="deleteEmailTemplateBtn" class="btn danger" type="button">Delete</button>
               </div>
             </div>
             <div class="field field-grow">
@@ -2947,36 +3005,31 @@
       <div class="email-templates-shell">
         <aside class="email-templates-sidebar">
           <div class="email-templates-sidebar-head">
-            <div class="email-templates-sidebar-tools">
-              <button id="addWhatsappTemplateBtn" class="btn primary email-add-template-btn" type="button">Add WhatsApp Template</button>
-              <label id="whatsappCloudToggleWrap" class="template-cloud-toggle" hidden>
-                <span>Cloud</span>
-                <span class="ios-switch">
-                  <input id="whatsappCloudToggleInput" type="checkbox" role="switch" aria-label="Show cloud WhatsApp templates" checked />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </span>
-              </label>
+            <div class="template-search-row">
+              <input
+                id="whatsappTemplatesSearchInput"
+                class="email-template-pick-search template-tab-search"
+                type="search"
+                placeholder="Search templates..."
+                aria-label="Search WhatsApp templates"
+              />
+              <button id="addWhatsappTemplateBtn" class="btn primary email-add-template-btn" type="button">+ New</button>
             </div>
-            <input
-              id="whatsappTemplatesSearchInput"
-              class="email-template-pick-search template-tab-search"
-              type="search"
-              placeholder="Search templates..."
-              aria-label="Search WhatsApp templates"
-            />
           </div>
           <div id="whatsappTemplatesList" class="email-templates-list"></div>
         </aside>
         <section class="email-template-editor-pane">
           <div id="whatsappTemplateEmpty" class="email-template-empty">Select a template from the left or create a new one.</div>
           <div id="whatsappTemplateEditor" class="email-template-editor" hidden>
-            <div class="email-template-top-actions">
-              <span id="whatsappTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
-              <button id="deleteWhatsappTemplateBtn" class="btn danger" type="button">Delete</button>
-            </div>
-            <div class="field">
-              <label for="whatsappTemplateNameInput">Template name</label>
-              <input id="whatsappTemplateNameInput" type="text" />
+            <div class="email-template-meta-row">
+              <div class="field">
+                <label for="whatsappTemplateNameInput">Template name</label>
+                <input id="whatsappTemplateNameInput" type="text" />
+              </div>
+              <div class="email-template-top-actions">
+                <span id="whatsappTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
+                <button id="deleteWhatsappTemplateBtn" class="btn danger" type="button">Delete</button>
+              </div>
             </div>
             <div class="field field-grow">
               <label for="whatsappTemplateBodyInput">Message</label>
@@ -2992,36 +3045,31 @@
       <div class="email-templates-shell">
         <aside class="email-templates-sidebar">
           <div class="email-templates-sidebar-head">
-            <div class="email-templates-sidebar-tools">
-              <button id="addNoteTemplateBtn" class="btn primary email-add-template-btn" type="button">Add Note Template</button>
-              <label id="noteCloudToggleWrap" class="template-cloud-toggle" hidden>
-                <span>Cloud</span>
-                <span class="ios-switch">
-                  <input id="noteCloudToggleInput" type="checkbox" role="switch" aria-label="Show cloud note templates" checked />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </span>
-              </label>
+            <div class="template-search-row">
+              <input
+                id="noteTemplatesSearchInput"
+                class="email-template-pick-search template-tab-search"
+                type="search"
+                placeholder="Search templates..."
+                aria-label="Search note templates"
+              />
+              <button id="addNoteTemplateBtn" class="btn primary email-add-template-btn" type="button">+ New</button>
             </div>
-            <input
-              id="noteTemplatesSearchInput"
-              class="email-template-pick-search template-tab-search"
-              type="search"
-              placeholder="Search templates..."
-              aria-label="Search note templates"
-            />
           </div>
           <div id="noteTemplatesList" class="email-templates-list"></div>
         </aside>
         <section class="email-template-editor-pane">
           <div id="noteTemplateEmpty" class="email-template-empty">Select a template from the left or create a new one.</div>
           <div id="noteTemplateEditor" class="email-template-editor" hidden>
-            <div class="email-template-top-actions">
-              <span id="noteTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
-              <button id="deleteNoteTemplateBtn" class="btn danger" type="button">Delete</button>
-            </div>
-            <div class="field">
-              <label for="noteTemplateNameInput">Template name</label>
-              <input id="noteTemplateNameInput" type="text" />
+            <div class="email-template-meta-row">
+              <div class="field">
+                <label for="noteTemplateNameInput">Template name</label>
+                <input id="noteTemplateNameInput" type="text" />
+              </div>
+              <div class="email-template-top-actions">
+                <span id="noteTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
+                <button id="deleteNoteTemplateBtn" class="btn danger" type="button">Delete</button>
+              </div>
             </div>
             <div class="field field-grow">
               <label for="noteTemplateBodyInput">Note body</label>
@@ -3034,10 +3082,6 @@
 
     <section id="settingsPage" class="settings-page" hidden>
       <div class="settings-card">
-        <div class="settings-head">
-          <h2>Settings</h2>
-        </div>
-
         <section class="settings-section">
           <h3 class="settings-section-title">General</h3>
           <div class="field settings-country-field">
@@ -3064,7 +3108,15 @@
             <div class="settings-toggle-grid">
               <label class="setting-toggle-card">
                 <span class="setting-toggle-copy">
-                  <span class="setting-toggle-title">HubSpot contact page widget</span>
+                  <span class="setting-toggle-title">
+                    Contact page widget
+                    <button
+                      id="contactWidgetInfoBtn"
+                      type="button"
+                      class="cloud-token-info-btn"
+                      aria-label="What is the contact page widget?"
+                    >i</button>
+                  </span>
                 </span>
                 <span class="ios-switch">
                   <input id="inlineQuickActionsEnabledInput" type="checkbox" role="switch" aria-label="Enable HubSpot contact page widget" />
@@ -3095,7 +3147,7 @@
           <p id="cloudConnectionStatus" class="template-import-summary">Not connected</p>
         </section>
 
-        <section class="settings-section">
+        <section class="settings-section" hidden>
           <h3 class="settings-section-title">Contacts View</h3>
           <div class="field">
             <label>Columns to show</label>
@@ -3109,7 +3161,7 @@
         </section>
 
         <section class="settings-section">
-          <h3 class="settings-section-title">Data</h3>
+          <h3 class="settings-section-title">Templates backup</h3>
           <div class="field">
             <div class="template-data-actions">
               <button id="exportTemplatesBtn" class="btn" type="button">Export Personal Templates</button>
@@ -3120,7 +3172,9 @@
         </section>
 
         <div class="settings-footer">
-          <a href="https://contactpoint.vercel.app" target="_blank" rel="noreferrer">Contact Point Website</a>
+          <a href="https://contactpoint.vercel.app" target="_blank" rel="noreferrer">Sign up to create templates you can share with your team</a>
+          <br />
+          Developed by <a href="https://serdarsalim.com" target="_blank" rel="noreferrer">Serdar Salim</a>
           <br />
           Not affiliated with HubSpot.
         </div>
@@ -3253,6 +3307,22 @@
         <div class="settings-actions">
           <button id="cancelTemplateImportBtn" class="btn" type="button">Cancel</button>
           <button id="applyTemplateImportBtn" class="btn primary" type="button">Import Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="contactWidgetInfoOverlay" class="record-id-required-overlay">
+      <div class="record-id-required-card">
+        <div class="settings-head">
+          <h2>Contact page widget</h2>
+        </div>
+        <ul class="record-id-required-message">
+          <li>Adds a quick-actions panel to each individual HubSpot contact page — the page you see when you click into a single contact.</li>
+          <li>Lets you send emails, WhatsApp messages, and notes from your templates without leaving HubSpot.</li>
+          <li>Turn it off here if you don't want the panel injected into HubSpot contact pages.</li>
+        </ul>
+        <div class="settings-actions">
+          <button id="contactWidgetInfoCloseBtn" class="btn primary" type="button">Got it</button>
         </div>
       </div>
     </div>
