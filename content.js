@@ -1012,9 +1012,11 @@
 
     const labels = Array.from(document.querySelectorAll("label, dt, th, span, div, p, strong, h4, h5"));
     for (const labelNode of labels) {
-      if (!isVisible(labelNode)) continue;
+      // Cheap text check first; isVisible() forces a style+layout reflow, so we
+      // only pay it for the handful of nodes that actually look like a phone label.
       const labelText = cleanText(labelNode.textContent || "");
       if (!labelText || labelText.length > 60 || !/\bphone(?: number)?\b/i.test(labelText)) continue;
+      if (!isVisible(labelNode)) continue;
 
       const sibling = labelNode.nextElementSibling;
       if (sibling instanceof Element && isVisible(sibling) && PHONE_PATTERN.test(cleanText(sibling.textContent || ""))) {
@@ -1081,15 +1083,35 @@
     nextWrapper.appendChild(button);
   }
 
-  function startContactIndexEnhancerWatcher() {
-    ensureContactIndexNewTabStyles();
-    enhanceContactIndexInlineButtons();
-    decorateActiveContactPhoneField();
-    if (!document.body) return;
-    const observer = new MutationObserver(() => {
+  let contactEnhancerRafId = 0;
+
+  function runContactEnhancers() {
+    contactEnhancerRafId = 0;
+    if (globalThis.__cpPerfDebug) {
+      const start = performance.now();
       enhanceContactIndexInlineButtons();
       decorateActiveContactPhoneField();
-    });
+      const ms = performance.now() - start;
+      if (ms > 4) console.log(`[ContactPoint] enhancers ran in ${ms.toFixed(1)}ms`);
+      return;
+    }
+    enhanceContactIndexInlineButtons();
+    decorateActiveContactPhoneField();
+  }
+
+  // Coalesce bursts of DOM mutations into a single run per animation frame.
+  // HubSpot mutates the DOM constantly; running the page-wide sweeps on every
+  // mutation pegs a CPU core, so we throttle to at most once per frame.
+  function scheduleContactEnhancers() {
+    if (contactEnhancerRafId) return;
+    contactEnhancerRafId = window.requestAnimationFrame(runContactEnhancers);
+  }
+
+  function startContactIndexEnhancerWatcher() {
+    ensureContactIndexNewTabStyles();
+    runContactEnhancers();
+    if (!document.body) return;
+    const observer = new MutationObserver(scheduleContactEnhancers);
     observer.observe(document.body, {
       childList: true,
       subtree: true
@@ -2615,6 +2637,7 @@
     searchQuery: "",
     lastUrl: "",
     watcherTimerId: 0,
+    sigWatcherTimerId: 0,
     dragging: {
       active: false,
       pointerId: null,
@@ -3368,7 +3391,7 @@
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel {
         border-top: 1px solid #e1d2f3;
-        padding: 5px 12px 4px 6px;
+        padding: 0 6px 4px 6px;
         max-height: 220px;
         overflow: auto;
         scrollbar-gutter: stable;
@@ -3394,19 +3417,21 @@
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-search {
-        padding: 8px 8px 4px;
+        padding: 0;
+        margin: 0 0 4px -6px;
       }
 
       #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-search-input {
         width: 100%;
-        border: 1px solid rgba(123, 99, 161, 0.26);
-        border-radius: 8px;
+        border: 0;
+        border-bottom: 1px solid rgba(123, 99, 161, 0.26);
+        border-radius: 0;
         background: rgba(255, 255, 255, 0.92);
         color: #402866;
         font: inherit;
         font-size: 12px;
         line-height: 1.3;
-        padding: 7px 9px;
+        padding: 8px 12px;
         outline: none;
       }
 
@@ -4471,15 +4496,30 @@
       syncInlineQuickActionsForCurrentRoute,
       INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
     );
-    window.setInterval(injectSigRemoveButtonIfNeeded, INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS);
+    inlineQuickActionsState.sigWatcherTimerId = window.setInterval(
+      injectSigRemoveButtonIfNeeded,
+      INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
+    );
     document.addEventListener("pointerdown", closeInlinePanelWhenClickingOutside, true);
     window.addEventListener("resize", handleInlineQuickActionsViewportResize);
+  }
+
+  function stopInlineQuickActionsWatcher() {
+    if (inlineQuickActionsState.watcherTimerId) {
+      window.clearInterval(inlineQuickActionsState.watcherTimerId);
+      inlineQuickActionsState.watcherTimerId = 0;
+    }
+    if (inlineQuickActionsState.sigWatcherTimerId) {
+      window.clearInterval(inlineQuickActionsState.sigWatcherTimerId);
+      inlineQuickActionsState.sigWatcherTimerId = 0;
+    }
   }
 
   applyHubSpotThemeFromSettingsStorage();
   subscribeHubSpotThemeChanges();
   startContactIndexEnhancerWatcher();
   startInlineQuickActionsWatcher();
+  window.addEventListener("pagehide", stopInlineQuickActionsWatcher);
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || !message.type) return;
