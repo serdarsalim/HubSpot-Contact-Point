@@ -12,6 +12,10 @@
         --text: #1f2d3d;
         --brand: #0b5cab;
         --brand-soft: #e8f0fa;
+        --nav-blue: #5c7cfa;
+        --nav-violet: #7c3aed;
+        --nav-grad: linear-gradient(135deg, #5c7cfa 0%, #7c3aed 100%);
+        --nav-bg: #f1f2fd;
         --sticky-head-h: 96px;
         --app-shell-width: 800px;
         --app-shell-height: 600px;
@@ -105,22 +109,107 @@
       }
 
       .topbar {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
         margin-bottom: 8px;
       }
 
-      html:not([data-launch-mode="detached"]) .topbar {
+      /* Full-width primary navigation tab bar */
+      .main-nav {
         display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 4px;
+        background: var(--nav-bg);
+        border-bottom: 1px solid var(--line);
+        border-radius: 10px 10px 0 0;
       }
 
-      html:not([data-launch-mode="detached"]) .title-tools,
-      html:not([data-launch-mode="detached"]) .title-actions {
-        justify-self: auto;
+      .nav-tab {
+        flex: 1 1 0;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        padding: 8px 4px 9px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        transition: color 120ms ease, background 120ms ease;
+      }
+
+      .nav-tab[hidden] {
+        display: none;
+      }
+
+      .nav-tab svg {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+        flex-shrink: 0;
+      }
+
+      /* Brand glyphs (e.g. WhatsApp) are filled logos, not outline icons */
+      .nav-tab svg.brand-glyph {
+        stroke: none;
+        fill: currentColor;
+      }
+
+      .nav-tab .nav-label {
+        white-space: nowrap;
+      }
+
+      .nav-tab:hover {
+        color: var(--nav-violet);
+        background: rgba(124, 58, 237, 0.06);
+      }
+
+      .nav-tab.active {
+        color: var(--nav-violet);
+      }
+
+      .nav-tab.active::after {
+        content: "";
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: -1px;
+        height: 2px;
+        border-radius: 2px 2px 0 0;
+        background: var(--nav-grad);
+      }
+
+      .nav-tab:focus-visible {
+        outline: 2px solid var(--nav-violet);
+        outline-offset: -3px;
+        border-radius: 6px;
+      }
+
+      .nav-tab.active:focus-visible,
+      .nav-tab:focus:not(:focus-visible) {
+        outline: none;
+      }
+
+      /* Utility toggles (theme, pop out) live in the same bar but read as
+         actions, not sections: no selection underline, a soft "on" pill. */
+      .nav-util {
+        flex: 0 1 auto;
+        min-width: 62px;
+      }
+
+      .nav-util-lead {
+        border-left: 1px solid var(--line);
+      }
+
+      .nav-util.active::after {
+        display: none;
+      }
+
+      .nav-util.active {
+        background: rgba(124, 58, 237, 0.1);
       }
 
       .sticky-head {
@@ -2137,26 +2226,27 @@
 
       .email-template-list-btn {
         width: 100%;
-        border: 1px solid #e3ebf4;
-        background: #fff;
+        border: 0;
+        background: transparent;
         color: var(--text);
-        border-radius: 10px;
+        border-radius: 9px;
         padding: 11px;
         text-align: left;
         cursor: pointer;
-        margin-bottom: 8px;
-        transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+        margin-bottom: 4px;
+        transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
       }
 
       .email-template-list-btn:hover {
-        border-color: #c7d7e9;
-        box-shadow: 0 2px 8px rgba(12, 54, 98, 0.08);
-        transform: translateY(-1px);
+        background: rgba(15, 23, 42, 0.05);
       }
 
       .email-template-list-btn.active {
-        background: linear-gradient(180deg, #f6fbff 0%, #edf5ff 100%);
-        border-color: #b9d1ea;
+        background: rgba(124, 58, 237, 0.1);
+      }
+
+      .email-template-list-btn.active:hover {
+        background: rgba(124, 58, 237, 0.14);
       }
 
       .email-template-list-btn.is-draggable {
@@ -2169,8 +2259,7 @@
       }
 
       .email-template-list-btn.drag-over {
-        border-color: #8cb3dd;
-        box-shadow: 0 0 0 2px rgba(71, 126, 192, 0.18);
+        box-shadow: inset 0 0 0 2px rgba(124, 58, 237, 0.4);
       }
 
       .email-template-list-name {
@@ -2201,7 +2290,7 @@
       }
 
       .email-template-list-btn.active .email-template-list-name {
-        color: var(--brand);
+        color: var(--nav-violet);
       }
 
       .email-template-editor-pane {
@@ -2461,7 +2550,32 @@
         --text: #e5eefb;
         --brand: #66a8ff;
         --brand-soft: #1d2c41;
+        --nav-bg: #172234;
         background: linear-gradient(180deg, #132033 0%, #0c1523 100%);
+      }
+
+      body[data-theme="dark"] .brand-strip .title-brand span {
+        background: linear-gradient(135deg, #8aa2ff 0%, #b28bff 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      body[data-theme="dark"] .nav-tab {
+        color: #91a8c3;
+      }
+
+      body[data-theme="dark"] .nav-tab:hover {
+        color: #b6a3ff;
+        background: rgba(167, 139, 250, 0.1);
+      }
+
+      body[data-theme="dark"] .nav-tab.active {
+        color: #b6a3ff;
+      }
+
+      body[data-theme="dark"] .nav-tab.active::after {
+        background: linear-gradient(135deg, #8aa2ff 0%, #b28bff 100%);
       }
 
       body[data-theme="dark"] .sticky-head {
@@ -2511,13 +2625,17 @@
         color: #9fb4ca;
       }
 
-      body[data-theme="dark"] .email-template-list-btn,
       body[data-theme="dark"] .email-template-pick-item,
       body[data-theme="dark"] .check,
       body[data-theme="dark"] .template-import-item,
       body[data-theme="dark"] .active-tab-field {
         background: #1a2a3e;
         border-color: #334960;
+        color: var(--text);
+      }
+
+      body[data-theme="dark"] .email-template-list-btn {
+        background: transparent;
         color: var(--text);
       }
 
@@ -2539,19 +2657,28 @@
       }
 
       body[data-theme="dark"] .email-template-list-btn.active {
-        background: linear-gradient(180deg, #24384f 0%, #1f3248 100%);
-        border-color: #4f6f93;
+        background: rgba(167, 139, 250, 0.18);
       }
 
-      body[data-theme="dark"] .email-template-pick-item:hover,
-      body[data-theme="dark"] .email-template-list-btn:hover {
+      body[data-theme="dark"] .email-template-list-btn.active:hover {
+        background: rgba(167, 139, 250, 0.24);
+      }
+
+      body[data-theme="dark"] .email-template-list-btn.active .email-template-list-name {
+        color: #b6a3ff;
+      }
+
+      body[data-theme="dark"] .email-template-pick-item:hover {
         background: #22364d;
         border-color: #527399;
       }
 
+      body[data-theme="dark"] .email-template-list-btn:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
       body[data-theme="dark"] .email-template-list-btn.drag-over {
-        border-color: #79a7d7;
-        box-shadow: 0 0 0 2px rgba(121, 167, 215, 0.18);
+        box-shadow: inset 0 0 0 2px rgba(167, 139, 250, 0.5);
       }
 
       body[data-theme="dark"] .record-id-required-card a {
@@ -2829,8 +2956,8 @@
     <div id="mainPage">
       <div id="stickyHead" class="sticky-head">
         <div class="topbar">
-          <div class="title-tools">
-            <button id="contactViewBtn" class="title-icon-btn active" aria-label="Show contacts" title="Show contacts" hidden>
+          <nav class="main-nav" aria-label="Sections">
+            <button id="contactViewBtn" class="nav-tab active" aria-label="Show contacts" title="Show contacts" hidden>
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path>
                 <circle cx="9.5" cy="8" r="3"></circle>
@@ -2838,23 +2965,20 @@
                 <path d="M16 4.13a3 3 0 0 1 0 5.74"></path>
               </svg>
             </button>
-            <button id="emailSettingsBtn" class="title-icon-btn" aria-label="Open email templates" title="Open email templates">
+            <button id="emailSettingsBtn" class="nav-tab" aria-label="Open email templates" title="Open email templates">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="3" y="5" width="18" height="14" rx="2"></rect>
                 <path d="M3 7l9 6 9-6"></path>
               </svg>
               <span class="nav-label">Email</span>
             </button>
-            <button id="whatsappSettingsBtn" class="title-icon-btn" aria-label="Open WhatsApp templates" title="Open WhatsApp templates">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 4c4.7 0 8.5 3.4 8.5 7.5S16.7 19 12 19c-1 0-2-.2-2.9-.5L4 20l1.4-3.8C4.5 14.9 4 13.2 4 11.5 4 7.4 7.8 4 12 4z"></path>
-                <circle cx="9" cy="11.5" r="0.9"></circle>
-                <circle cx="12" cy="11.5" r="0.9"></circle>
-                <circle cx="15" cy="11.5" r="0.9"></circle>
+            <button id="whatsappSettingsBtn" class="nav-tab" aria-label="Open WhatsApp templates" title="Open WhatsApp templates">
+              <svg class="brand-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.15h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.24-8.23a8.2 8.2 0 0 1 8.23 8.24c0 4.54-3.7 8.25-8.23 8.25zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.98-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.24-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.43l-.48-.01c-.17 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.25 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"></path>
               </svg>
               <span class="nav-label">WhatsApp</span>
             </button>
-            <button id="noteSettingsBtn" class="title-icon-btn" aria-label="Open note templates" title="Open note templates">
+            <button id="noteSettingsBtn" class="nav-tab" aria-label="Open note templates" title="Open note templates">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M4 3h12l4 4v14H4z"></path>
                 <path d="M16 3v4h4"></path>
@@ -2863,24 +2987,14 @@
               </svg>
               <span class="nav-label">Notes</span>
             </button>
-          </div>
-          <div class="title-actions">
-            <button id="popOutBtn" class="title-icon-btn popout-btn" aria-label="Pop out to a new window" title="Pop out to a new window">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M14 4h6v6"></path>
-                <path d="M10 14 20 4"></path>
-                <path d="M20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5"></path>
-              </svg>
-              <span class="nav-label">Pop out</span>
-            </button>
-            <button id="settingsBtn" class="title-icon-btn" aria-label="Open settings" title="Open settings">
+            <button id="settingsBtn" class="nav-tab" aria-label="Open settings" title="Open settings">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.26.3.45.65.6 1 .08.31.11.63.1.95a2 2 0 0 1 1.9 2.05 2 2 0 0 1-1.9 2.05c.01.32-.02.64-.1.95-.15.35-.34.7-.6 1z"></path>
               </svg>
               <span class="nav-label">Settings</span>
             </button>
-            <button id="themeToggleBtn" class="title-icon-btn theme-toggle-btn" aria-label="Switch to dark mode" title="Switch to dark mode">
+            <button id="themeToggleBtn" class="nav-tab nav-util nav-util-lead theme-toggle-btn" aria-label="Switch to dark mode" title="Switch to dark mode">
               <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8"></path>
               </svg>
@@ -2888,9 +3002,17 @@
                 <circle cx="12" cy="12" r="4"></circle>
                 <path d="M12 2v2.2M12 19.8V22M4.2 12H2M22 12h-2.2M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6M19.1 19.1l-1.6-1.6M6.5 6.5 4.9 4.9"></path>
               </svg>
-              <span class="nav-label">Dark mode</span>
+              <span class="nav-label">Theme</span>
             </button>
-          </div>
+            <button id="popOutBtn" class="nav-tab nav-util popout-btn" aria-label="Pop out to a new window" title="Pop out to a new window">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 4h6v6"></path>
+                <path d="M10 14 20 4"></path>
+                <path d="M20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5"></path>
+              </svg>
+              <span class="nav-label">Pop out</span>
+            </button>
+          </nav>
         </div>
 
         <div id="status" class="status">
@@ -2979,12 +3101,10 @@
           <div id="emailTemplateEditor" class="email-template-editor" hidden>
             <div class="email-template-meta-row">
               <div class="field">
-                <label for="emailTemplateNameInput">Template name</label>
-                <input id="emailTemplateNameInput" type="text" />
+                <input id="emailTemplateNameInput" type="text" placeholder="Template name" aria-label="Template name" />
               </div>
               <div class="field">
-                <label for="emailTemplateSubjectInput">Subject</label>
-                <input id="emailTemplateSubjectInput" type="text" />
+                <input id="emailTemplateSubjectInput" type="text" placeholder="Subject" aria-label="Subject" />
               </div>
               <div class="email-template-top-actions">
                 <span id="emailTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
@@ -2992,8 +3112,7 @@
               </div>
             </div>
             <div class="field field-grow">
-              <label for="emailTemplateBodyInput">Body</label>
-              <textarea id="emailTemplateBodyInput"></textarea>
+              <textarea id="emailTemplateBodyInput" placeholder="Body" aria-label="Body"></textarea>
             </div>
           </div>
         </section>
@@ -3023,8 +3142,7 @@
           <div id="whatsappTemplateEditor" class="email-template-editor" hidden>
             <div class="email-template-meta-row">
               <div class="field">
-                <label for="whatsappTemplateNameInput">Template name</label>
-                <input id="whatsappTemplateNameInput" type="text" />
+                <input id="whatsappTemplateNameInput" type="text" placeholder="Template name" aria-label="Template name" />
               </div>
               <div class="email-template-top-actions">
                 <span id="whatsappTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
@@ -3032,8 +3150,7 @@
               </div>
             </div>
             <div class="field field-grow">
-              <label for="whatsappTemplateBodyInput">Message</label>
-              <textarea id="whatsappTemplateBodyInput"></textarea>
+              <textarea id="whatsappTemplateBodyInput" placeholder="Message" aria-label="Message"></textarea>
             </div>
           </div>
         </section>
@@ -3063,8 +3180,7 @@
           <div id="noteTemplateEditor" class="email-template-editor" hidden>
             <div class="email-template-meta-row">
               <div class="field">
-                <label for="noteTemplateNameInput">Template name</label>
-                <input id="noteTemplateNameInput" type="text" />
+                <input id="noteTemplateNameInput" type="text" placeholder="Template name" aria-label="Template name" />
               </div>
               <div class="email-template-top-actions">
                 <span id="noteTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>
@@ -3072,8 +3188,7 @@
               </div>
             </div>
             <div class="field field-grow">
-              <label for="noteTemplateBodyInput">Note body</label>
-              <textarea id="noteTemplateBodyInput"></textarea>
+              <textarea id="noteTemplateBodyInput" placeholder="Note body" aria-label="Note body"></textarea>
             </div>
           </div>
         </section>
