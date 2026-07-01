@@ -837,8 +837,15 @@
     if (!(element instanceof Element)) return false;
     const rect = element.getBoundingClientRect();
     if (rect.width < 20 || rect.height < 20 || rect.width > 64 || rect.height > 64) return false;
+    // Avatars are roughly square; this filters out the wide name/text nodes
+    // without depending on the avatar having text.
+    const aspectRatio = rect.width / rect.height;
+    if (aspectRatio < 0.7 || aspectRatio > 1.4) return false;
+    // Initials avatars carry short text; icon/silhouette avatars (used when a
+    // name contains an emoji, so HubSpot can't derive initials) have none.
+    // Accept both — only reject nodes with too much text to be an avatar.
     const text = cleanText(element.textContent || "");
-    if (!text || text.length > 4) return false;
+    if (text.length > 4) return false;
     return true;
   }
 
