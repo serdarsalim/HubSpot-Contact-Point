@@ -961,11 +961,9 @@
   }
 
   function toggleSettings() {
-    if (dom.settingsPageEl?.hidden) {
-      openSettings();
-      return;
-    }
-    closeSettings();
+    // Nav items act as an always-on selector: re-clicking the active menu keeps
+    // it open instead of deselecting down to the deprecated contacts list view.
+    openSettings();
   }
 
   function openEmailSettings() {
@@ -1046,19 +1044,11 @@
   }
 
   function toggleEmailSettings() {
-    if (dom.emailTemplatesPageEl?.hidden) {
-      openEmailSettings();
-      return;
-    }
-    closeEmailSettings();
+    openEmailSettings();
   }
 
   function toggleWhatsappSettings() {
-    if (dom.whatsappTemplatesPageEl?.hidden) {
-      openWhatsappSettings();
-      return;
-    }
-    closeWhatsappSettings();
+    openWhatsappSettings();
   }
 
   function openNoteSettings() {
@@ -1103,11 +1093,7 @@
   }
 
   function toggleNoteSettings() {
-    if (dom.noteTemplatesPageEl?.hidden) {
-      openNoteSettings();
-      return;
-    }
-    closeNoteSettings();
+    openNoteSettings();
   }
 
   function openContactsView() {
