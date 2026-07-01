@@ -743,8 +743,8 @@
       }
 
       .cp-contact-index-whatsapp-btn svg {
-        width: 14px;
-        height: 14px;
+        width: 17px;
+        height: 17px;
         stroke: currentColor;
         fill: none;
         stroke-width: 1.7;
@@ -777,8 +777,8 @@
       }
 
       .cp-active-contact-whatsapp-btn svg {
-        width: 14px;
-        height: 14px;
+        width: 17px;
+        height: 17px;
         stroke: currentColor;
         fill: none;
         stroke-width: 1.7;
