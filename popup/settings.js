@@ -371,22 +371,23 @@
           <div class="cloud-auth-card-head">
             <strong>${App.escapeHtml(orgName)}</strong>
             <div class="cloud-token-row">
-              <span class="cloud-token-display" title="Click to copy" data-cloud-token-copy="${App.escapeHtml(apiToken)}">${App.escapeHtml(apiToken.split("_")[1] || apiToken)}</span>
-              <button
-                class="btn cloud-toggle-templates-btn"
-                type="button"
-                data-cloud-toggle-templates-btn="true"
-                data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
-                aria-label="${isPaused ? "Start team templates" : "Pause team templates"}"
-                title="${isPaused ? "Resume — show templates from this org" : "Pause — don't show templates from this org"}"
-              ><span class="cloud-toggle-icon" aria-hidden="true">${
-                isPaused
-                  ? '<svg viewBox="0 0 16 16" focusable="false"><path d="M5 3.5 12 8l-7 4.5z"></path></svg>'
-                  : '<svg viewBox="0 0 16 16" focusable="false"><rect x="4" y="3.5" width="2.5" height="9" rx="1"></rect><rect x="9.5" y="3.5" width="2.5" height="9" rx="1"></rect></svg>'
-              }</span><span class="cloud-btn-label">${isPaused ? "Resume" : "Pause"}</span></button>
-              <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Refresh templates" title="Refresh — download and sync templates from the cloud"><span class="cloud-refresh-icon" aria-hidden="true">↻</span><span class="cloud-btn-label">Refresh</span></button>
-              <button class="btn cloud-remove-btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Remove org key" title="Remove — disconnect this org key"><span aria-hidden="true">X</span><span class="cloud-btn-label">Remove</span></button>
-              <span class="cloud-sync-label">${isPaused ? "Paused" : `Synced: ${App.escapeHtml(syncedAt)}`}</span>
+              <span class="cloud-sync-label" data-state="${isPaused ? "paused" : "synced"}">${isPaused ? "Hidden" : `Updated: ${App.escapeHtml(syncedAt)}`}</span>
+              <div class="cloud-actions">
+                <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Update templates" title="Update — download the latest templates from the cloud"><span class="cloud-refresh-icon" aria-hidden="true">↻</span><span class="cloud-btn-label">Update</span></button>
+                <button
+                  class="btn cloud-toggle-templates-btn"
+                  type="button"
+                  data-cloud-toggle-templates-btn="true"
+                  data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
+                  aria-label="${isPaused ? "Show team templates" : "Hide team templates"}"
+                  title="${isPaused ? "Show — display this team's templates" : "Hide — stop showing this team's templates"}"
+                ><span class="cloud-toggle-icon" aria-hidden="true">${
+                  isPaused
+                    ? '<svg viewBox="0 0 16 16" focusable="false"><path d="M1 8s2.6-4.5 7-4.5 7 4.5 7 4.5-2.6 4.5-7 4.5S1 8 1 8z"></path><circle cx="8" cy="8" r="2"></circle></svg>'
+                    : '<svg viewBox="0 0 16 16" focusable="false"><path d="M6.3 4.2A6.9 6.9 0 0 1 8 4c4.4 0 7 4 7 4a12.6 12.6 0 0 1-2 2.4M3.4 5.5A12.6 12.6 0 0 0 1 8s2.6 4.5 7 4.5a6.9 6.9 0 0 0 2.3-.4"></path><path d="M6.7 6.7a2 2 0 0 0 2.6 2.6"></path><path d="M2 2l12 12"></path></svg>'
+                }</span><span class="cloud-btn-label">${isPaused ? "Show" : "Hide"}</span></button>
+                <button class="btn cloud-remove-btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Remove org key" title="Remove — disconnect this org key"><span class="cloud-remove-icon" aria-hidden="true">✕</span><span class="cloud-btn-label">Remove</span></button>
+              </div>
             </div>
           </div>
         </div>
@@ -445,6 +446,19 @@
     App.blurFocusedElementWithin(dom.contactWidgetInfoOverlay);
     requestAnimationFrame(() => {
       dom.contactWidgetInfoOverlay.classList.remove("open");
+    });
+  }
+
+  function openCountryCodeInfoDialog() {
+    if (!dom.countryCodeInfoOverlay) return;
+    dom.countryCodeInfoOverlay.classList.add("open");
+  }
+
+  function closeCountryCodeInfoDialog() {
+    if (!dom.countryCodeInfoOverlay) return;
+    App.blurFocusedElementWithin(dom.countryCodeInfoOverlay);
+    requestAnimationFrame(() => {
+      dom.countryCodeInfoOverlay.classList.remove("open");
     });
   }
 
@@ -1323,16 +1337,16 @@
     const failed = results.filter((item) => !item.ok);
     if (!silent) {
       if (!failed.length) {
-        App.setStatus(targetOrgId ? "Cloud templates refreshed." : `Cloud templates refreshed for ${successCount} org(s).`);
+        App.setStatus(targetOrgId ? "Team templates updated." : `Team templates updated for ${successCount} org(s).`);
       } else {
-        App.setStatus(`Cloud refresh finished: ${successCount} succeeded, ${failed.length} failed.`);
+        App.setStatus(`Update finished: ${successCount} succeeded, ${failed.length} failed.`);
       }
     }
     if (showToast && typeof App.showToast === "function") {
       if (!failed.length) {
-        App.showToast(targetOrgId ? "Cloud templates refreshed." : `Cloud templates refreshed for ${successCount} org(s).`);
+        App.showToast(targetOrgId ? "Team templates updated." : `Team templates updated for ${successCount} org(s).`);
       } else {
-        App.showToast(`Cloud refresh finished: ${successCount} succeeded, ${failed.length} failed.`, 3200);
+        App.showToast(`Update finished: ${successCount} succeeded, ${failed.length} failed.`, 3200);
       }
     }
 
@@ -1500,7 +1514,7 @@
     rerenderTemplateViewsForCloudChange();
 
     const next = findCloudAuthByOrgId(organizationId);
-    App.setStatus(next?.templatesPaused ? "Team templates paused." : "Team templates started.");
+    App.setStatus(next?.templatesPaused ? "Team templates hidden." : "Team templates shown.");
   }
 
   async function refreshCloudTemplatesSessionCheck() {
@@ -1905,7 +1919,7 @@
     const now = new Date();
     const pad = (num) => String(num).padStart(2, "0");
     const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
-    return `contact-point-personal-templates-${stamp}.json`;
+    return `contact-point-local-templates-${stamp}.json`;
   }
 
   function downloadJson(filename, payload) {
@@ -2152,6 +2166,8 @@
     closeCloudTokenInfoDialog,
     openContactWidgetInfoDialog,
     closeContactWidgetInfoDialog,
+    openCountryCodeInfoDialog,
+    closeCountryCodeInfoDialog,
     applyTemplateImport,
     renderCloudConnectionStatus,
     renderCloudAuthCards,

@@ -37,6 +37,21 @@
       if (event.target === dom.contactWidgetInfoOverlay) App.closeContactWidgetInfoDialog();
     });
   }
+  if (dom.countryCodeInfoBtn) {
+    dom.countryCodeInfoBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      App.openCountryCodeInfoDialog();
+    });
+  }
+  if (dom.countryCodeInfoCloseBtn) {
+    dom.countryCodeInfoCloseBtn.addEventListener("click", App.closeCountryCodeInfoDialog);
+  }
+  if (dom.countryCodeInfoOverlay) {
+    dom.countryCodeInfoOverlay.addEventListener("click", (event) => {
+      if (event.target === dom.countryCodeInfoOverlay) App.closeCountryCodeInfoDialog();
+    });
+  }
 
   if (dom.addEmailTemplateBtn) {
     dom.addEmailTemplateBtn.addEventListener("click", App.addEmailTemplateDraft);

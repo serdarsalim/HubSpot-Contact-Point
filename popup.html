@@ -366,8 +366,8 @@
       }
 
       .btn.primary {
-        background: var(--brand);
-        border-color: var(--brand);
+        background: var(--nav-grad);
+        border-color: transparent;
         color: #fff;
       }
 
@@ -1627,7 +1627,7 @@
 
       .cloud-auth-card-head {
         display: grid;
-        grid-template-columns: max-content minmax(0, 1fr);
+        grid-template-columns: 170px minmax(0, 1fr);
         align-items: center;
         column-gap: 12px;
         row-gap: 8px;
@@ -1637,6 +1637,9 @@
 
       .cloud-auth-card-head strong {
         min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .cloud-token-display {
@@ -1700,15 +1703,8 @@
         font-size: 12px;
         color: var(--muted);
         white-space: nowrap;
-        margin-left: auto;
-      }
-
-      .cloud-remove-btn {
-        color: #c0392b;
-      }
-
-      .cloud-remove-btn:hover {
-        color: #a5281b;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .cloud-auth-actions {
@@ -1717,38 +1713,57 @@
         margin-top: 8px;
       }
 
-      .cloud-refresh-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-      }
-
-      .cloud-toggle-templates-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        color: #4a617d;
-        border-color: #d6e1ed;
-        background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
-      }
-
-      .cloud-remove-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-      }
-
+      /* Row actions: flat icon + label items, grouped and right-aligned so
+         Resume/Refresh/Remove line up in columns across rows. */
       .cloud-btn-label {
         font-size: 12px;
         font-weight: 600;
       }
 
-      .cloud-toggle-templates-btn:hover {
-        color: #1f4f82;
-        border-color: #b8cce2;
+      .cloud-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
+
+      .cloud-token-row .cloud-toggle-templates-btn,
+      .cloud-token-row .cloud-refresh-btn,
+      .cloud-token-row .cloud-remove-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 6px;
+        min-width: 96px;
+        height: 30px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        box-shadow: none;
+        color: var(--muted);
+        transition: background-color 120ms ease, color 120ms ease;
+      }
+
+      .cloud-token-row .cloud-toggle-templates-btn:hover,
+      .cloud-token-row .cloud-refresh-btn:hover {
+        background: rgba(124, 58, 237, 0.1);
+        color: var(--nav-violet);
+      }
+
+      .cloud-token-row .cloud-remove-btn {
+        color: #c0392b;
+      }
+
+      .cloud-token-row .cloud-remove-btn:hover {
+        background: rgba(192, 57, 43, 0.1);
+        color: #a5281b;
+      }
+
+      .cloud-remove-icon {
+        font-size: 13px;
+        line-height: 1;
       }
 
       .cloud-toggle-icon {
@@ -1762,7 +1777,11 @@
       .cloud-toggle-icon svg {
         width: 16px;
         height: 16px;
-        fill: currentColor;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
 
       .cloud-refresh-icon {
@@ -1832,6 +1851,12 @@
         align-items: center;
         column-gap: 12px;
         position: relative;
+      }
+
+      .settings-country-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
       }
 
       .settings-country-field label {
@@ -2061,12 +2086,28 @@
       }
 
       .settings-footer {
-        margin-top: 16px;
-        padding-top: 12px;
+        margin-top: 20px;
+        padding-top: 16px;
         border-top: 1px solid var(--line);
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .settings-footer .footer-cta {
+        display: inline-block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .settings-footer .footer-meta {
         font-size: 12px;
         line-height: 1.5;
-        color: var(--muted);
+      }
+
+      .settings-footer .footer-dot {
+        margin: 0 4px;
+        opacity: 0.5;
       }
 
       .settings-footer a {
@@ -2710,6 +2751,34 @@
         color: #ffb4ad;
       }
 
+      body[data-theme="dark"] .cloud-token-row .cloud-remove-btn {
+        color: #ff8a80;
+      }
+
+      body[data-theme="dark"] .cloud-token-row .cloud-remove-btn:hover {
+        color: #ffb4ad;
+        background: rgba(255, 138, 128, 0.14);
+      }
+
+      body[data-theme="dark"] .cloud-token-row .cloud-toggle-templates-btn,
+      body[data-theme="dark"] .cloud-token-row .cloud-refresh-btn,
+      body[data-theme="dark"] .cloud-token-row .cloud-remove-btn {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        color: var(--muted);
+      }
+
+      body[data-theme="dark"] .cloud-token-row .cloud-remove-btn {
+        color: #ff8a80;
+      }
+
+      body[data-theme="dark"] .cloud-token-row .cloud-toggle-templates-btn:hover,
+      body[data-theme="dark"] .cloud-token-row .cloud-refresh-btn:hover {
+        color: #b6a3ff;
+        background: rgba(167, 139, 250, 0.14);
+      }
+
       body[data-theme="dark"] .cloud-token-input {
         border-color: #456181;
         background: #1a2a3e;
@@ -2946,8 +3015,8 @@
       }
 
       body[data-theme="dark"] .btn.primary {
-        background: #2f78d3;
-        border-color: #2f78d3;
+        background: linear-gradient(135deg, #6b8bff 0%, #8b5cf6 100%);
+        border-color: transparent;
         color: #fff;
       }
     </style>
@@ -3200,7 +3269,15 @@
         <section class="settings-section">
           <h3 class="settings-section-title">General</h3>
           <div class="field settings-country-field">
-            <label for="countryPrefixInput">Default country code</label>
+            <span class="settings-country-label">
+              <label for="countryPrefixInput">Default country code</label>
+              <button
+                id="countryCodeInfoBtn"
+                type="button"
+                class="cloud-token-info-btn"
+                aria-label="What is the default country code?"
+              >i</button>
+            </span>
             <div id="countryPrefixDropdown" class="country-prefix-dropdown">
               <button id="countryPrefixDropdownBtn" type="button" class="country-prefix-dropdown-btn">
                 Not set
@@ -3244,7 +3321,7 @@
 
         <section class="settings-section">
           <div class="cloud-token-label-row">
-            <h3 class="settings-section-title">Team template access keys</h3>
+            <h3 class="settings-section-title">Team access keys</h3>
             <button
               id="cloudTokenInfoBtn"
               class="cloud-token-info-btn"
@@ -3279,19 +3356,19 @@
           <h3 class="settings-section-title">Templates backup</h3>
           <div class="field">
             <div class="template-data-actions">
-              <button id="exportTemplatesBtn" class="btn" type="button">Export Personal Templates</button>
-              <button id="importTemplatesBtn" class="btn" type="button">Import Personal Templates</button>
+              <button id="exportTemplatesBtn" class="btn" type="button">Export Local Templates</button>
+              <button id="importTemplatesBtn" class="btn" type="button">Import Local Templates</button>
             </div>
             <input id="importTemplatesInput" type="file" accept="application/json,.json" hidden />
           </div>
         </section>
 
         <div class="settings-footer">
-          <a href="https://contactpoint.vercel.app" target="_blank" rel="noreferrer">Sign up to create templates you can share with your team</a>
-          <br />
-          Developed by <a href="https://serdarsalim.com" target="_blank" rel="noreferrer">Serdar Salim</a>
-          <br />
-          Not affiliated with HubSpot.
+          <a class="footer-cta" href="https://contactpoint.vercel.app" target="_blank" rel="noreferrer">Sign up to create templates you can share with your team</a>
+          <div class="footer-meta">
+            Developed by <a href="https://serdarsalim.com" target="_blank" rel="noreferrer">Serdar Salim</a>
+            <span class="footer-dot">·</span> Not affiliated with HubSpot.
+          </div>
         </div>
 
       </div>
@@ -3411,7 +3488,7 @@
     <div id="templateImportOverlay" class="template-import-overlay">
       <div class="template-import-card">
         <div class="settings-head">
-          <h2>Import Personal Templates</h2>
+          <h2>Import Local Templates</h2>
         </div>
         <p id="templateImportSummary" class="template-import-summary"></p>
         <div class="template-import-mode-row">
@@ -3422,6 +3499,22 @@
         <div class="settings-actions">
           <button id="cancelTemplateImportBtn" class="btn" type="button">Cancel</button>
           <button id="applyTemplateImportBtn" class="btn primary" type="button">Import Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="countryCodeInfoOverlay" class="record-id-required-overlay">
+      <div class="record-id-required-card">
+        <div class="settings-head">
+          <h2>Default country code</h2>
+        </div>
+        <ul class="record-id-required-message">
+          <li>Sets the country dialing code used when a contact's phone number is saved without one.</li>
+          <li>When you open WhatsApp from such a number, this code is added first so it dials the right country.</li>
+          <li>Numbers that already include a country code are left unchanged.</li>
+        </ul>
+        <div class="settings-actions">
+          <button id="countryCodeInfoCloseBtn" class="btn primary" type="button">Got it</button>
         </div>
       </div>
     </div>
@@ -3448,14 +3541,10 @@
           <h2>Shared team templates</h2>
         </div>
         <ul class="record-id-required-message">
-          <li>Shared team templates let members in the same organization use the same templates in this extension.</li>
-          <li>Shared templates are read-only here.</li>
-          <li>Organization admins manage shared templates in the workspace web app.</li>
-          <li>Your personal local templates are still available and unchanged.</li>
-          <li>
-            Shared team templates are a premium feature. For access, contact Serdar Salim at
-            <a href="https://contactpoint.vercel.app" target="_blank" rel="noreferrer">contactpoint.vercel.app</a>.
-          </li>
+          <li><strong>Shared team templates</strong> come from your team's cloud account, so everyone connected to the same team sees the same templates. They're read-only here — an admin manages them centrally.</li>
+          <li><strong>Local templates</strong> are your own, saved only in this browser. You can create and edit them freely, and no one else sees them.</li>
+          <li><strong>Update</strong> pulls the latest shared templates from the cloud — use it after your admin adds or changes something.</li>
+          <li><strong>Show / Hide</strong> controls whether a team's shared templates appear in your lists. Hide keeps the team connected but tucks its templates away; Show brings them back. Your local templates are never affected.</li>
         </ul>
         <div class="settings-actions">
           <button id="cloudTokenInfoCloseBtn" class="btn primary" type="button">Got it</button>
