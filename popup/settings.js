@@ -212,6 +212,9 @@
     { name: "Zimbabwe", code: "263" }
   ]);
 
+  // Device-local preference (not synced across machines), off unless toggled.
+  const OPEN_CONTACTS_BG_LOCAL_KEY = "openContactsInBackground";
+
   function buildSyncSettingsPayload(settingsInput = state.settings) {
     const source = settingsInput && typeof settingsInput === "object" ? settingsInput : {};
     const {
@@ -462,6 +465,19 @@
     });
   }
 
+  function openBackgroundTabInfoDialog() {
+    if (!dom.backgroundTabInfoOverlay) return;
+    dom.backgroundTabInfoOverlay.classList.add("open");
+  }
+
+  function closeBackgroundTabInfoDialog() {
+    if (!dom.backgroundTabInfoOverlay) return;
+    App.blurFocusedElementWithin(dom.backgroundTabInfoOverlay);
+    requestAnimationFrame(() => {
+      dom.backgroundTabInfoOverlay.classList.remove("open");
+    });
+  }
+
   function rerenderTemplateViewsForCloudChange() {
     if (!dom.emailTemplatesPageEl?.hidden && typeof App.renderEmailTemplatesPage === "function") {
       App.renderEmailTemplatesPage();
@@ -706,6 +722,13 @@
         queueSettingsAutosave({ immediate: true });
       });
     }
+    if (dom.openContactsInBackgroundInput) {
+      dom.openContactsInBackgroundInput.addEventListener("change", () => {
+        void chrome.storage.local.set({
+          [OPEN_CONTACTS_BG_LOCAL_KEY]: dom.openContactsInBackgroundInput.checked
+        });
+      });
+    }
     if (dom.columnChecks) {
       dom.columnChecks.addEventListener("change", () => {
         queueSettingsAutosave({ immediate: true });
@@ -934,6 +957,13 @@
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
     if (dom.inlineQuickActionsEnabledInput) {
       dom.inlineQuickActionsEnabledInput.checked = state.settings.inlineQuickActionsEnabled !== false;
+    }
+    if (dom.openContactsInBackgroundInput) {
+      void chrome.storage.local.get(OPEN_CONTACTS_BG_LOCAL_KEY).then((res) => {
+        if (dom.openContactsInBackgroundInput) {
+          dom.openContactsInBackgroundInput.checked = res?.[OPEN_CONTACTS_BG_LOCAL_KEY] === true;
+        }
+      });
     }
     renderCloudAuthCards();
     renderCloudConnectionStatus();
@@ -2168,6 +2198,8 @@
     closeContactWidgetInfoDialog,
     openCountryCodeInfoDialog,
     closeCountryCodeInfoDialog,
+    openBackgroundTabInfoDialog,
+    closeBackgroundTabInfoDialog,
     applyTemplateImport,
     renderCloudConnectionStatus,
     renderCloudAuthCards,

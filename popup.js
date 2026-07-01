@@ -52,6 +52,21 @@
       if (event.target === dom.countryCodeInfoOverlay) App.closeCountryCodeInfoDialog();
     });
   }
+  if (dom.backgroundTabInfoBtn) {
+    dom.backgroundTabInfoBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      App.openBackgroundTabInfoDialog();
+    });
+  }
+  if (dom.backgroundTabInfoCloseBtn) {
+    dom.backgroundTabInfoCloseBtn.addEventListener("click", App.closeBackgroundTabInfoDialog);
+  }
+  if (dom.backgroundTabInfoOverlay) {
+    dom.backgroundTabInfoOverlay.addEventListener("click", (event) => {
+      if (event.target === dom.backgroundTabInfoOverlay) App.closeBackgroundTabInfoDialog();
+    });
+  }
 
   if (dom.addEmailTemplateBtn) {
     dom.addEmailTemplateBtn.addEventListener("click", App.addEmailTemplateDraft);

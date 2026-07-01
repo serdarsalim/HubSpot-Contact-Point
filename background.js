@@ -7,6 +7,7 @@ const DETACHED_POPUP_URL = chrome.runtime.getURL(DETACHED_POPUP_PATH);
 const SETTINGS_KEY = "popupSettings";
 const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
 const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
+const OPEN_CONTACTS_BG_LOCAL_KEY = "openContactsInBackground";
 const DEFAULT_LAUNCH_MODE = "attached";
 const OPEN_POPUP_WINDOW_MESSAGE = "OPEN_POPUP_WINDOW";
 const OPEN_OR_FOCUS_CONTACT_TAB_MESSAGE = "OPEN_OR_FOCUS_CONTACT_TAB";
@@ -187,6 +188,8 @@ async function openOrFocusContactTab(urlInput, sender = null) {
     throw new Error("Invalid HubSpot contact URL.");
   }
 
+  const openInBackground = await readOpenContactsInBackground();
+
   const existingTabs = await chrome.tabs.query({ url: ["https://*.hubspot.com/*"] });
   const existingTab =
     [...existingTabs]
@@ -194,6 +197,8 @@ async function openOrFocusContactTab(urlInput, sender = null) {
       .sort((a, b) => Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0))[0] || null;
 
   if (existingTab && typeof existingTab.id === "number") {
+    // In background mode the tab already exists, so leave the user where they are.
+    if (openInBackground) return;
     if (typeof existingTab.windowId === "number") {
       await chrome.windows.update(existingTab.windowId, { focused: true });
     }
@@ -239,12 +244,12 @@ async function openOrFocusContactTab(urlInput, sender = null) {
 
   await chrome.tabs.create({
     url,
-    active: true,
+    active: !openInBackground,
     ...(typeof targetWindowId === "number" ? { windowId: targetWindowId } : {}),
     ...(typeof createIndex === "number" ? { index: createIndex } : {})
   });
 
-  if (typeof targetWindowId === "number") {
+  if (!openInBackground && typeof targetWindowId === "number") {
     await chrome.windows.update(targetWindowId, { focused: true });
   }
 }
@@ -256,6 +261,15 @@ function normalizeLaunchMode(value) {
 async function readLaunchMode() {
   const result = await chrome.storage.sync.get(SETTINGS_KEY);
   return normalizeLaunchMode(result?.[SETTINGS_KEY]?.defaultLaunchMode || DEFAULT_LAUNCH_MODE);
+}
+
+async function readOpenContactsInBackground() {
+  try {
+    const result = await chrome.storage.local.get(OPEN_CONTACTS_BG_LOCAL_KEY);
+    return result?.[OPEN_CONTACTS_BG_LOCAL_KEY] === true;
+  } catch (_error) {
+    return false;
+  }
 }
 
 async function applyActionPopupByLaunchMode(modeInput) {
