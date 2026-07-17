@@ -331,6 +331,9 @@ Manual smoke test:
 - **`manifest.json` version is always today's date: `YYYY.M.D`** (no zero
   padding). Shipping on 17 July 2026 means `2026.7.17`. It is not semver —
   never increment the last part as a patch number.
+- Shipping twice in one day: add a fourth segment (`2026.7.17.1`, `.2`, ...).
+  The Web Store rejects an upload whose version already exists, so a same-day
+  hotfix needs its own number.
 - Build the package: `./build-shareable.sh` writes `shareable/`, then zip it
   to `contact-pointshareable.zip`. Both are gitignored.
 - `./publish-webstore.sh` builds, uploads and publishes to the Web Store
