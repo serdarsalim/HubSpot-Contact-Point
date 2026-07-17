@@ -158,6 +158,19 @@
     }
   }
 
+  // A content script left behind by an extension reload or auto-update keeps
+  // running against a dead chrome.runtime, and every API call from it throws
+  // "Extension context invalidated". It can't reach the extension any more, so
+  // the sweeps stop themselves rather than throw on every DOM mutation until
+  // the tab is refreshed.
+  function isExtensionContextAlive() {
+    try {
+      return !!chrome.runtime?.id;
+    } catch (_error) {
+      return false;
+    }
+  }
+
   function cleanText(text) {
     return (text || "").replace(/\s+/g, " ").trim();
   }
@@ -1273,9 +1286,14 @@
   }
 
   let contactEnhancerRafId = 0;
+  let contactEnhancerObserver = null;
 
   function runContactEnhancers() {
     contactEnhancerRafId = 0;
+    if (!isExtensionContextAlive()) {
+      stopContactEnhancers();
+      return;
+    }
     if (globalThis.__cpPerfDebug) {
       const start = performance.now();
       enhanceContactIndexInlineButtons();
@@ -1298,12 +1316,25 @@
     contactEnhancerRafId = window.requestAnimationFrame(runContactEnhancers);
   }
 
+  function stopContactEnhancers() {
+    if (contactEnhancerObserver) {
+      contactEnhancerObserver.disconnect();
+      contactEnhancerObserver = null;
+    }
+    if (contactEnhancerRafId) {
+      window.cancelAnimationFrame(contactEnhancerRafId);
+      contactEnhancerRafId = 0;
+    }
+    window.removeEventListener("scroll", hidePhoneFlagTooltip, true);
+    hidePhoneFlagTooltip();
+  }
+
   function startContactIndexEnhancerWatcher() {
     ensureContactIndexNewTabStyles();
     runContactEnhancers();
     if (!document.body) return;
-    const observer = new MutationObserver(scheduleContactEnhancers);
-    observer.observe(document.body, {
+    contactEnhancerObserver = new MutationObserver(scheduleContactEnhancers);
+    contactEnhancerObserver.observe(document.body, {
       childList: true,
       subtree: true
     });
