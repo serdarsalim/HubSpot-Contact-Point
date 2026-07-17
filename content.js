@@ -794,6 +794,12 @@
         cursor: default;
       }
 
+      .cp-phone-flag-inline {
+        display: inline-block;
+        margin-right: 6px;
+        vertical-align: -1px;
+      }
+
       .cp-phone-flag-tooltip {
         position: fixed;
         z-index: 2147483647;
@@ -1203,8 +1209,43 @@
       }
     }
 
-    const flagHost = phoneValueEl.closest(".cp-active-contact-phone-action-wrap") || phoneValueEl.parentElement;
-    applyPhoneFlagDecoration(flagHost, rawPhone);
+  }
+
+  // On record pages HubSpot renders each phone property as a visible text
+  // span plus a separate textless tel: icon button, so flags anchor on the
+  // text: any leaf element whose entire content is an international number
+  // gets a flag inline before it. Phone, Mobile phone and WhatsApp phone all
+  // light up without per-field wiring.
+  const PHONE_TEXT_ONLY_PATTERN = /^\+[\d\s().-]{6,}\d$/;
+
+  function decorateActiveContactPhoneTextFlags() {
+    if (inferObjectKindFromPath() !== "contact" || !getRecordIdFromPath()) return;
+    // Toggle-off removal is handled centrally in applyInlineQuickActionsSettings.
+    if (!inlineQuickActionsState.phoneFlagsEnabled) return;
+
+    for (const node of document.querySelectorAll("span, a, p, div")) {
+      if (node.childElementCount !== 0) continue;
+      const raw = node.textContent || "";
+      // Cheap guards first — this sweep runs on every enhancer pass.
+      if (raw.length > 32 || raw.indexOf("+") === -1) continue;
+      const text = raw.trim();
+      if (!PHONE_TEXT_ONLY_PATTERN.test(text)) continue;
+
+      const previous = node.previousElementSibling;
+      const existing = previous instanceof Element && previous.classList.contains("cp-phone-flag") ? previous : null;
+      const country = resolvePhoneFlagCountry(text);
+      if (!country) {
+        if (existing) existing.remove();
+        continue;
+      }
+      if (existing) {
+        if (existing.dataset.cpIso === country.iso) continue;
+        existing.remove();
+      }
+      const flag = createPhoneFlagElement(country);
+      flag.classList.add("cp-phone-flag-inline");
+      node.parentNode?.insertBefore(flag, node);
+    }
   }
 
   let contactEnhancerRafId = 0;
@@ -1215,12 +1256,14 @@
       const start = performance.now();
       enhanceContactIndexInlineButtons();
       decorateActiveContactPhoneField();
+      decorateActiveContactPhoneTextFlags();
       const ms = performance.now() - start;
       if (ms > 4) console.log(`[ContactPoint] enhancers ran in ${ms.toFixed(1)}ms`);
       return;
     }
     enhanceContactIndexInlineButtons();
     decorateActiveContactPhoneField();
+    decorateActiveContactPhoneTextFlags();
   }
 
   // Coalesce bursts of DOM mutations into a single run per animation frame.
