@@ -40,10 +40,21 @@
       "js": [
         "shared/messages.js",
         "shared/config.js",
+        "shared/countries.js",
         "vendor/darkreader/darkreader.js",
         "content.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vendor/flags/*.svg"
+      ],
+      "matches": [
+        "https://*.hubspot.com/*"
+      ]
     }
   ]
 }

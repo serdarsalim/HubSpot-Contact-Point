@@ -7,210 +7,17 @@
   const cloudPendingTokenDrafts = {};
   const cloudAuthTokenDrafts = {};
   let countryDropdownBound = false;
+  let phoneFlagsExcludeDropdownBound = false;
   let settingsAutosaveBound = false;
   let settingsAutosaveTimerId = null;
   let settingsAutosaveDirty = false;
   let settingsAutosaveInFlight = false;
   let settingsAutosaveQueued = false;
   const SETTINGS_AUTOSAVE_DEBOUNCE_MS = 420;
-  const COUNTRY_PREFIX_OPTIONS = Object.freeze([
-    { name: "Afghanistan", code: "93" },
-    { name: "Albania", code: "355" },
-    { name: "Algeria", code: "213" },
-    { name: "Andorra", code: "376" },
-    { name: "Angola", code: "244" },
-    { name: "Antigua and Barbuda", code: "1268" },
-    { name: "Argentina", code: "54" },
-    { name: "Armenia", code: "374" },
-    { name: "Australia", code: "61" },
-    { name: "Austria", code: "43" },
-    { name: "Azerbaijan", code: "994" },
-    { name: "Bahamas", code: "1242" },
-    { name: "Bahrain", code: "973" },
-    { name: "Bangladesh", code: "880" },
-    { name: "Barbados", code: "1246" },
-    { name: "Belarus", code: "375" },
-    { name: "Belgium", code: "32" },
-    { name: "Belize", code: "501" },
-    { name: "Benin", code: "229" },
-    { name: "Bhutan", code: "975" },
-    { name: "Bolivia", code: "591" },
-    { name: "Bosnia and Herzegovina", code: "387" },
-    { name: "Botswana", code: "267" },
-    { name: "Brazil", code: "55" },
-    { name: "Brunei", code: "673" },
-    { name: "Bulgaria", code: "359" },
-    { name: "Burkina Faso", code: "226" },
-    { name: "Burundi", code: "257" },
-    { name: "Cambodia", code: "855" },
-    { name: "Cameroon", code: "237" },
-    { name: "Canada", code: "1" },
-    { name: "Cape Verde", code: "238" },
-    { name: "Central African Republic", code: "236" },
-    { name: "Chad", code: "235" },
-    { name: "Chile", code: "56" },
-    { name: "China", code: "86" },
-    { name: "Colombia", code: "57" },
-    { name: "Comoros", code: "269" },
-    { name: "Congo (Republic)", code: "242" },
-    { name: "Congo (DRC)", code: "243" },
-    { name: "Costa Rica", code: "506" },
-    { name: "Cote d'Ivoire", code: "225" },
-    { name: "Croatia", code: "385" },
-    { name: "Cuba", code: "53" },
-    { name: "Cyprus", code: "357" },
-    { name: "Czechia", code: "420" },
-    { name: "Denmark", code: "45" },
-    { name: "Djibouti", code: "253" },
-    { name: "Dominica", code: "1767" },
-    { name: "Dominican Republic", code: "1809" },
-    { name: "Ecuador", code: "593" },
-    { name: "Egypt", code: "20" },
-    { name: "El Salvador", code: "503" },
-    { name: "Equatorial Guinea", code: "240" },
-    { name: "Eritrea", code: "291" },
-    { name: "Estonia", code: "372" },
-    { name: "Eswatini", code: "268" },
-    { name: "Ethiopia", code: "251" },
-    { name: "Fiji", code: "679" },
-    { name: "Finland", code: "358" },
-    { name: "France", code: "33" },
-    { name: "Gabon", code: "241" },
-    { name: "Gambia", code: "220" },
-    { name: "Georgia", code: "995" },
-    { name: "Germany", code: "49" },
-    { name: "Ghana", code: "233" },
-    { name: "Greece", code: "30" },
-    { name: "Grenada", code: "1473" },
-    { name: "Guatemala", code: "502" },
-    { name: "Guinea", code: "224" },
-    { name: "Guinea-Bissau", code: "245" },
-    { name: "Guyana", code: "592" },
-    { name: "Haiti", code: "509" },
-    { name: "Honduras", code: "504" },
-    { name: "Hungary", code: "36" },
-    { name: "Iceland", code: "354" },
-    { name: "India", code: "91" },
-    { name: "Indonesia", code: "62" },
-    { name: "Iran", code: "98" },
-    { name: "Iraq", code: "964" },
-    { name: "Ireland", code: "353" },
-    { name: "Israel", code: "972" },
-    { name: "Italy", code: "39" },
-    { name: "Jamaica", code: "1876" },
-    { name: "Japan", code: "81" },
-    { name: "Jordan", code: "962" },
-    { name: "Kazakhstan", code: "7" },
-    { name: "Kenya", code: "254" },
-    { name: "Kiribati", code: "686" },
-    { name: "Kuwait", code: "965" },
-    { name: "Kyrgyzstan", code: "996" },
-    { name: "Laos", code: "856" },
-    { name: "Latvia", code: "371" },
-    { name: "Lebanon", code: "961" },
-    { name: "Lesotho", code: "266" },
-    { name: "Liberia", code: "231" },
-    { name: "Libya", code: "218" },
-    { name: "Liechtenstein", code: "423" },
-    { name: "Lithuania", code: "370" },
-    { name: "Luxembourg", code: "352" },
-    { name: "Madagascar", code: "261" },
-    { name: "Malawi", code: "265" },
-    { name: "Malaysia", code: "60" },
-    { name: "Maldives", code: "960" },
-    { name: "Mali", code: "223" },
-    { name: "Malta", code: "356" },
-    { name: "Marshall Islands", code: "692" },
-    { name: "Mauritania", code: "222" },
-    { name: "Mauritius", code: "230" },
-    { name: "Mexico", code: "52" },
-    { name: "Micronesia", code: "691" },
-    { name: "Moldova", code: "373" },
-    { name: "Monaco", code: "377" },
-    { name: "Mongolia", code: "976" },
-    { name: "Montenegro", code: "382" },
-    { name: "Morocco", code: "212" },
-    { name: "Mozambique", code: "258" },
-    { name: "Myanmar", code: "95" },
-    { name: "Namibia", code: "264" },
-    { name: "Nauru", code: "674" },
-    { name: "Nepal", code: "977" },
-    { name: "Netherlands", code: "31" },
-    { name: "New Zealand", code: "64" },
-    { name: "Nicaragua", code: "505" },
-    { name: "Niger", code: "227" },
-    { name: "Nigeria", code: "234" },
-    { name: "North Korea", code: "850" },
-    { name: "North Macedonia", code: "389" },
-    { name: "Norway", code: "47" },
-    { name: "Oman", code: "968" },
-    { name: "Pakistan", code: "92" },
-    { name: "Palau", code: "680" },
-    { name: "Palestine", code: "970" },
-    { name: "Panama", code: "507" },
-    { name: "Papua New Guinea", code: "675" },
-    { name: "Paraguay", code: "595" },
-    { name: "Peru", code: "51" },
-    { name: "Philippines", code: "63" },
-    { name: "Poland", code: "48" },
-    { name: "Portugal", code: "351" },
-    { name: "Qatar", code: "974" },
-    { name: "Romania", code: "40" },
-    { name: "Russia", code: "7" },
-    { name: "Rwanda", code: "250" },
-    { name: "Saint Kitts and Nevis", code: "1869" },
-    { name: "Saint Lucia", code: "1758" },
-    { name: "Saint Vincent and the Grenadines", code: "1784" },
-    { name: "Samoa", code: "685" },
-    { name: "San Marino", code: "378" },
-    { name: "Sao Tome and Principe", code: "239" },
-    { name: "Saudi Arabia", code: "966" },
-    { name: "Senegal", code: "221" },
-    { name: "Serbia", code: "381" },
-    { name: "Seychelles", code: "248" },
-    { name: "Sierra Leone", code: "232" },
-    { name: "Singapore", code: "65" },
-    { name: "Slovakia", code: "421" },
-    { name: "Slovenia", code: "386" },
-    { name: "Solomon Islands", code: "677" },
-    { name: "Somalia", code: "252" },
-    { name: "South Africa", code: "27" },
-    { name: "South Korea", code: "82" },
-    { name: "South Sudan", code: "211" },
-    { name: "Spain", code: "34" },
-    { name: "Sri Lanka", code: "94" },
-    { name: "Sudan", code: "249" },
-    { name: "Suriname", code: "597" },
-    { name: "Sweden", code: "46" },
-    { name: "Switzerland", code: "41" },
-    { name: "Syria", code: "963" },
-    { name: "Taiwan", code: "886" },
-    { name: "Tajikistan", code: "992" },
-    { name: "Tanzania", code: "255" },
-    { name: "Thailand", code: "66" },
-    { name: "Timor-Leste", code: "670" },
-    { name: "Togo", code: "228" },
-    { name: "Tonga", code: "676" },
-    { name: "Trinidad and Tobago", code: "1868" },
-    { name: "Tunisia", code: "216" },
-    { name: "Turkey", code: "90" },
-    { name: "Turkmenistan", code: "993" },
-    { name: "Tuvalu", code: "688" },
-    { name: "Uganda", code: "256" },
-    { name: "Ukraine", code: "380" },
-    { name: "United Arab Emirates", code: "971" },
-    { name: "United Kingdom", code: "44" },
-    { name: "United States", code: "1" },
-    { name: "Uruguay", code: "598" },
-    { name: "Uzbekistan", code: "998" },
-    { name: "Vanuatu", code: "678" },
-    { name: "Vatican City", code: "379" },
-    { name: "Venezuela", code: "58" },
-    { name: "Vietnam", code: "84" },
-    { name: "Yemen", code: "967" },
-    { name: "Zambia", code: "260" },
-    { name: "Zimbabwe", code: "263" }
-  ]);
+  // Country list lives in shared/countries.js so the popup and the content
+  // script (phone-number flags) can't drift apart; entries also carry the
+  // iso code that names each flag asset in vendor/flags/.
+  const COUNTRY_PREFIX_OPTIONS = globalThis.ContactPilotShared.COUNTRY_OPTIONS;
 
   // Device-local preference (not synced across machines), off unless toggled.
   const OPEN_CONTACTS_BG_LOCAL_KEY = "openContactsInBackground";
@@ -722,6 +529,12 @@
         queueSettingsAutosave({ immediate: true });
       });
     }
+    if (dom.phoneFlagsEnabledInput) {
+      dom.phoneFlagsEnabledInput.addEventListener("change", () => {
+        syncPhoneFlagsExcludeFieldVisibility();
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
     if (dom.openContactsInBackgroundInput) {
       dom.openContactsInBackgroundInput.addEventListener("change", () => {
         void chrome.storage.local.set({
@@ -926,6 +739,162 @@
     updateCountryPrefixDropdownButton();
   }
 
+  // --- Phone country flags: excluded-countries picker -----------------------
+  // Multi-select over the same country list as the prefix picker: the panel
+  // stays open while toggling, exclusions render as removable chips below.
+
+  function normalizePhoneFlagsExcludedIsos(value) {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set();
+    for (const iso of value) {
+      const normalized = String(iso || "").trim().toLowerCase();
+      if (/^[a-z]{2}$/.test(normalized)) seen.add(normalized);
+    }
+    return Array.from(seen);
+  }
+
+  function getPhoneFlagsExcludedIsos() {
+    return normalizePhoneFlagsExcludedIsos(state.settings.phoneFlagsExcludedIsos);
+  }
+
+  function countryFlagImageHtml(iso, className) {
+    return `<img class='${className}' src='vendor/flags/${App.escapeHtml(iso)}.svg' alt='' aria-hidden='true' />`;
+  }
+
+  function syncPhoneFlagsExcludeFieldVisibility() {
+    if (!dom.phoneFlagsExcludeField) return;
+    const enabled = dom.phoneFlagsEnabledInput ? dom.phoneFlagsEnabledInput.checked : true;
+    dom.phoneFlagsExcludeField.hidden = !enabled;
+  }
+
+  function renderPhoneFlagsExcludedChips() {
+    if (!dom.phoneFlagsExcludedChips) return;
+    const excluded = getPhoneFlagsExcludedIsos();
+    const countries = COUNTRY_PREFIX_OPTIONS.filter((item) => excluded.includes(item.iso));
+    dom.phoneFlagsExcludedChips.hidden = !countries.length;
+    dom.phoneFlagsExcludedChips.innerHTML = countries
+      .map((item) => {
+        return `<span class='phone-flags-excluded-chip'>${countryFlagImageHtml(item.iso, "phone-flags-chip-flag")}${App.escapeHtml(
+          item.name
+        )}<button type='button' class='phone-flags-chip-remove' data-flag-iso='${App.escapeHtml(item.iso)}' aria-label='Show flags for ${App.escapeHtml(
+          item.name
+        )} again'>&times;</button></span>`;
+      })
+      .join("");
+  }
+
+  function renderPhoneFlagsExcludeDropdownList() {
+    if (!dom.phoneFlagsExcludeDropdownList || !dom.phoneFlagsExcludeDropdownSearch) return;
+
+    const excluded = new Set(getPhoneFlagsExcludedIsos());
+    const query = String(dom.phoneFlagsExcludeDropdownSearch.value || "")
+      .trim()
+      .toLowerCase();
+
+    const filtered = query
+      ? COUNTRY_PREFIX_OPTIONS.filter((item) => {
+          return App.searchTextMatchesQuery(`${item.name || ""} ${item.code || ""}`, query);
+        })
+      : COUNTRY_PREFIX_OPTIONS;
+
+    if (!filtered.length) {
+      dom.phoneFlagsExcludeDropdownList.innerHTML = "<div class='email-template-empty'>No countries found.</div>";
+      return;
+    }
+
+    dom.phoneFlagsExcludeDropdownList.innerHTML = filtered
+      .map((item) => {
+        const selectedClass = excluded.has(item.iso) ? "is-selected" : "";
+        return `<button type='button' class='country-prefix-dropdown-item phone-flags-exclude-item ${selectedClass}' data-flag-iso='${App.escapeHtml(
+          item.iso
+        )}'>${countryFlagImageHtml(item.iso, "phone-flags-option-flag")}${App.escapeHtml(item.name)}</button>`;
+      })
+      .join("");
+  }
+
+  function togglePhoneFlagsExcludedIso(iso) {
+    const normalized = String(iso || "").trim().toLowerCase();
+    if (!/^[a-z]{2}$/.test(normalized)) return;
+    const excluded = getPhoneFlagsExcludedIsos();
+    const next = excluded.includes(normalized)
+      ? excluded.filter((item) => item !== normalized)
+      : [...excluded, normalized];
+    state.settings.phoneFlagsExcludedIsos = next;
+    renderPhoneFlagsExcludedChips();
+    renderPhoneFlagsExcludeDropdownList();
+    queueSettingsAutosave({ immediate: true });
+  }
+
+  function closePhoneFlagsExcludeDropdown() {
+    if (!dom.phoneFlagsExcludeDropdown) return;
+    dom.phoneFlagsExcludeDropdown.classList.remove("open");
+  }
+
+  function openPhoneFlagsExcludeDropdown() {
+    if (!dom.phoneFlagsExcludeDropdown) return;
+    dom.phoneFlagsExcludeDropdown.classList.add("open");
+    if (dom.phoneFlagsExcludeDropdownSearch) {
+      dom.phoneFlagsExcludeDropdownSearch.value = "";
+    }
+    renderPhoneFlagsExcludeDropdownList();
+    if (dom.phoneFlagsExcludeDropdownSearch) {
+      dom.phoneFlagsExcludeDropdownSearch.focus();
+    }
+  }
+
+  function bindPhoneFlagsExcludeControls() {
+    if (phoneFlagsExcludeDropdownBound) return;
+    if (!dom.phoneFlagsExcludeDropdown || !dom.phoneFlagsExcludeDropdownBtn || !dom.phoneFlagsExcludeDropdownList) return;
+    phoneFlagsExcludeDropdownBound = true;
+
+    dom.phoneFlagsExcludeDropdownBtn.addEventListener("click", () => {
+      const isOpen = dom.phoneFlagsExcludeDropdown?.classList.contains("open");
+      if (isOpen) {
+        closePhoneFlagsExcludeDropdown();
+      } else {
+        openPhoneFlagsExcludeDropdown();
+      }
+    });
+
+    if (dom.phoneFlagsExcludeDropdownSearch) {
+      dom.phoneFlagsExcludeDropdownSearch.addEventListener("input", () => {
+        renderPhoneFlagsExcludeDropdownList();
+      });
+      dom.phoneFlagsExcludeDropdownSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closePhoneFlagsExcludeDropdown();
+        }
+      });
+    }
+
+    dom.phoneFlagsExcludeDropdownList.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const option = target.closest("[data-flag-iso]");
+      if (!(option instanceof HTMLElement)) return;
+      togglePhoneFlagsExcludedIso(option.getAttribute("data-flag-iso"));
+    });
+
+    if (dom.phoneFlagsExcludedChips) {
+      dom.phoneFlagsExcludedChips.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const removeBtn = target.closest(".phone-flags-chip-remove");
+        if (!(removeBtn instanceof HTMLElement)) return;
+        togglePhoneFlagsExcludedIso(removeBtn.getAttribute("data-flag-iso"));
+      });
+    }
+
+    document.addEventListener("click", (event) => {
+      if (!dom.phoneFlagsExcludeDropdown) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (dom.phoneFlagsExcludeDropdown.contains(target)) return;
+      closePhoneFlagsExcludeDropdown();
+    });
+  }
+
   function settingsFromForm() {
     const visibleColumns = {};
     dom.columnChecks.querySelectorAll("input[data-col-id]").forEach((input) => {
@@ -944,6 +913,8 @@
       inlineQuickActionsEnabled: dom.inlineQuickActionsEnabledInput
         ? dom.inlineQuickActionsEnabledInput.checked
         : true,
+      phoneFlagsEnabled: dom.phoneFlagsEnabledInput ? dom.phoneFlagsEnabledInput.checked : true,
+      phoneFlagsExcludedIsos: getPhoneFlagsExcludedIsos(),
       visibleColumns,
       columnWidths: App.normalizeColumnWidths(state.settings.columnWidths),
       columnOrder: App.normalizeColumnOrder(state.settings.columnOrder)
@@ -958,6 +929,12 @@
     if (dom.inlineQuickActionsEnabledInput) {
       dom.inlineQuickActionsEnabledInput.checked = state.settings.inlineQuickActionsEnabled !== false;
     }
+    if (dom.phoneFlagsEnabledInput) {
+      dom.phoneFlagsEnabledInput.checked = state.settings.phoneFlagsEnabled !== false;
+    }
+    syncPhoneFlagsExcludeFieldVisibility();
+    renderPhoneFlagsExcludedChips();
+    bindPhoneFlagsExcludeControls();
     if (dom.openContactsInBackgroundInput) {
       void chrome.storage.local.get(OPEN_CONTACTS_BG_LOCAL_KEY).then((res) => {
         if (dom.openContactsInBackgroundInput) {
@@ -2058,6 +2035,8 @@
       noteTemplates
     };
     state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled !== false;
+    state.settings.phoneFlagsEnabled = state.settings.phoneFlagsEnabled !== false;
+    state.settings.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(state.settings.phoneFlagsExcludedIsos);
     state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
     state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud !== false;
     state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud !== false;

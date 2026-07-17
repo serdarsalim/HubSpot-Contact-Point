@@ -783,8 +783,116 @@
         fill: none;
         stroke-width: 1.7;
       }
+
+      .cp-phone-flag {
+        width: 18px;
+        height: 13.5px;
+        border-radius: 2px;
+        flex: 0 0 auto;
+        vertical-align: middle;
+        box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+        cursor: default;
+      }
+
+      .cp-phone-flag-tooltip {
+        position: fixed;
+        z-index: 2147483647;
+        transform: translate(-50%, -100%);
+        padding: 4px 9px;
+        border-radius: 6px;
+        background: #1f2933;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.35;
+        white-space: nowrap;
+        pointer-events: none;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+      }
     `;
     document.head.appendChild(style);
+  }
+
+  // One tooltip for every flag, fixed-position so HubSpot's overflow-hidden
+  // table cells can't clip it. Shown instantly on hover — a native title
+  // waits ~1s, which defeats "glance at the flag, read the country".
+  let phoneFlagTooltipEl = null;
+
+  function hidePhoneFlagTooltip() {
+    if (!phoneFlagTooltipEl) return;
+    phoneFlagTooltipEl.remove();
+    phoneFlagTooltipEl = null;
+  }
+
+  function showPhoneFlagTooltip(flag) {
+    if (!(flag instanceof Element) || !flag.isConnected) return;
+    hidePhoneFlagTooltip();
+    const label = String(flag.dataset.cpCountry || "").trim();
+    if (!label) return;
+    const rect = flag.getBoundingClientRect();
+    const tooltip = document.createElement("div");
+    tooltip.className = "cp-phone-flag-tooltip";
+    tooltip.textContent = label;
+    tooltip.style.left = `${Math.round(rect.left + rect.width / 2)}px`;
+    if (rect.top < 40) {
+      // No room above (first table row): show below the flag instead.
+      tooltip.style.top = `${Math.round(rect.bottom + 6)}px`;
+      tooltip.style.transform = "translate(-50%, 0)";
+    } else {
+      tooltip.style.top = `${Math.round(rect.top - 6)}px`;
+    }
+    document.body.appendChild(tooltip);
+    phoneFlagTooltipEl = tooltip;
+  }
+
+  // Scrolling moves the flag out from under a fixed tooltip without firing
+  // mouseleave, so drop it as soon as anything scrolls.
+  window.addEventListener("scroll", hidePhoneFlagTooltip, true);
+
+  // Country for a number's flag, or null when the feature can't or shouldn't
+  // draw one: feature off, country excluded in settings, or the number has no
+  // "+" prefix (its country would just echo the rep's default prefix).
+  function resolvePhoneFlagCountry(rawPhone) {
+    if (!inlineQuickActionsState.phoneFlagsEnabled) return null;
+    const resolver = globalThis.ContactPilotShared?.phoneCountry;
+    if (typeof resolver !== "function") return null;
+    const country = resolver(rawPhone);
+    if (!country) return null;
+    if (inlineQuickActionsState.phoneFlagsExcludedIsos.includes(country.iso)) return null;
+    return country;
+  }
+
+  function createPhoneFlagElement(country) {
+    const flag = document.createElement("img");
+    flag.className = "cp-phone-flag";
+    flag.src = chrome.runtime.getURL(`vendor/flags/${country.iso}.svg`);
+    flag.alt = country.label;
+    flag.dataset.cpIso = country.iso;
+    flag.dataset.cpCountry = country.label;
+    flag.draggable = false;
+    flag.addEventListener("mouseenter", () => showPhoneFlagTooltip(flag));
+    flag.addEventListener("mouseleave", hidePhoneFlagTooltip);
+    return flag;
+  }
+
+  // Idempotent per container: keeps an existing flag when the country still
+  // matches, replaces or removes it otherwise. The flag sits first inside the
+  // phone action wrap (flag, number, WhatsApp button) when one exists.
+  function applyPhoneFlagDecoration(container, rawPhone) {
+    if (!(container instanceof Element)) return;
+    const existing = container.querySelector(".cp-phone-flag");
+    const country = resolvePhoneFlagCountry(rawPhone);
+    if (!country) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing instanceof Element) {
+      if (existing.dataset.cpIso === country.iso) return;
+      existing.remove();
+    }
+    const wrapSelector = ".cp-contact-index-phone-action-wrap, .cp-active-contact-phone-action-wrap";
+    const wrapper = container.matches(wrapSelector) ? container : container.querySelector(wrapSelector);
+    (wrapper || container).prepend(createPhoneFlagElement(country));
   }
 
   async function openContactIndexLinkInNewTab(anchor) {
@@ -972,25 +1080,31 @@
 
   function decorateContactIndexPhoneCell(phoneCell) {
     if (!(phoneCell instanceof Element)) return;
-    if (phoneCell.querySelector(".cp-contact-index-whatsapp-btn")) return;
 
     const rawPhone = cleanPhoneCandidate(phoneCell.textContent || "");
-    const waUrl = buildContactIndexWhatsappUrl(rawPhone);
-    if (!waUrl) return;
 
-    const contentElement = findContactIndexPhoneContentElement(phoneCell);
-    const button = createContactIndexWhatsappButton(waUrl);
+    if (!phoneCell.querySelector(".cp-contact-index-whatsapp-btn")) {
+      const waUrl = buildContactIndexWhatsappUrl(rawPhone);
+      if (waUrl) {
+        const contentElement = findContactIndexPhoneContentElement(phoneCell);
+        const button = createContactIndexWhatsappButton(waUrl);
 
-    if (contentElement instanceof Element && !contentElement.classList.contains("cp-contact-index-phone-action-wrap")) {
-      const wrapper = document.createElement("span");
-      wrapper.className = "cp-contact-index-phone-action-wrap";
-      contentElement.parentNode?.insertBefore(wrapper, contentElement);
-      wrapper.appendChild(contentElement);
-      wrapper.appendChild(button);
-      return;
+        if (contentElement instanceof Element && !contentElement.classList.contains("cp-contact-index-phone-action-wrap")) {
+          const wrapper = document.createElement("span");
+          wrapper.className = "cp-contact-index-phone-action-wrap";
+          contentElement.parentNode?.insertBefore(wrapper, contentElement);
+          wrapper.appendChild(contentElement);
+          wrapper.appendChild(button);
+        } else {
+          phoneCell.appendChild(button);
+        }
+      }
     }
 
-    phoneCell.appendChild(button);
+    // After the button pass so the flag lands inside the action wrap it
+    // creates, and independent of it so cells decorated on an earlier sweep
+    // still gain or shed flags when the setting changes.
+    applyPhoneFlagDecoration(phoneCell, rawPhone);
   }
 
   function enhanceContactIndexInlineButtons() {
@@ -1067,27 +1181,30 @@
     if (!waUrl) return;
 
     const existingButton = phoneValueEl.parentElement?.querySelector(".cp-active-contact-whatsapp-btn") || null;
-    if (existingButton instanceof HTMLButtonElement) {
-      if (existingButton.dataset.waUrl === waUrl) return;
+    if (existingButton instanceof HTMLButtonElement && existingButton.dataset.waUrl !== waUrl) {
       existingButton.remove();
     }
 
-    const wrapper =
-      phoneValueEl.parentElement instanceof Element && phoneValueEl.parentElement.classList.contains("cp-active-contact-phone-action-wrap")
-        ? phoneValueEl.parentElement
-        : null;
-    const button = createActiveContactWhatsappButton(waUrl);
+    if (!phoneValueEl.parentElement?.querySelector(".cp-active-contact-whatsapp-btn")) {
+      const wrapper =
+        phoneValueEl.parentElement instanceof Element && phoneValueEl.parentElement.classList.contains("cp-active-contact-phone-action-wrap")
+          ? phoneValueEl.parentElement
+          : null;
+      const button = createActiveContactWhatsappButton(waUrl);
 
-    if (wrapper) {
-      wrapper.appendChild(button);
-      return;
+      if (wrapper) {
+        wrapper.appendChild(button);
+      } else {
+        const nextWrapper = document.createElement("span");
+        nextWrapper.className = "cp-active-contact-phone-action-wrap";
+        phoneValueEl.parentNode?.insertBefore(nextWrapper, phoneValueEl);
+        nextWrapper.appendChild(phoneValueEl);
+        nextWrapper.appendChild(button);
+      }
     }
 
-    const nextWrapper = document.createElement("span");
-    nextWrapper.className = "cp-active-contact-phone-action-wrap";
-    phoneValueEl.parentNode?.insertBefore(nextWrapper, phoneValueEl);
-    nextWrapper.appendChild(phoneValueEl);
-    nextWrapper.appendChild(button);
+    const flagHost = phoneValueEl.closest(".cp-active-contact-phone-action-wrap") || phoneValueEl.parentElement;
+    applyPhoneFlagDecoration(flagHost, rawPhone);
   }
 
   let contactEnhancerRafId = 0;
@@ -2636,6 +2753,8 @@
     noteTemplateUsageByContact: {},
     enabled: true,
     countryPrefix: DEFAULT_COUNTRY_CODE,
+    phoneFlagsEnabled: true,
+    phoneFlagsExcludedIsos: [],
     position: null,
     busy: false,
     pendingEmailApplyRunning: false,
@@ -2657,6 +2776,13 @@
     return value !== false;
   }
 
+  function normalizePhoneFlagsExcludedIsos(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((iso) => String(iso || "").trim().toLowerCase())
+      .filter((iso) => /^[a-z]{2}$/.test(iso));
+  }
+
   function applyInlineQuickActionsSettings(settings, options = {}) {
     const source = settings && typeof settings === "object" ? settings : null;
     if (source) {
@@ -2665,6 +2791,20 @@
       }
       if (Object.prototype.hasOwnProperty.call(source, "inlineQuickActionsEnabled")) {
         inlineQuickActionsState.enabled = normalizeInlineQuickActionsEnabled(source.inlineQuickActionsEnabled);
+      }
+
+      const flagSignatureBefore = `${inlineQuickActionsState.phoneFlagsEnabled}|${inlineQuickActionsState.phoneFlagsExcludedIsos.join(",")}`;
+      if (Object.prototype.hasOwnProperty.call(source, "phoneFlagsEnabled")) {
+        inlineQuickActionsState.phoneFlagsEnabled = source.phoneFlagsEnabled !== false;
+      }
+      if (Object.prototype.hasOwnProperty.call(source, "phoneFlagsExcludedIsos")) {
+        inlineQuickActionsState.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(source.phoneFlagsExcludedIsos);
+      }
+      const flagSignatureAfter = `${inlineQuickActionsState.phoneFlagsEnabled}|${inlineQuickActionsState.phoneFlagsExcludedIsos.join(",")}`;
+      if (flagSignatureBefore !== flagSignatureAfter) {
+        hidePhoneFlagTooltip();
+        for (const flag of document.querySelectorAll(".cp-phone-flag")) flag.remove();
+        scheduleContactEnhancers();
       }
     }
     if (options.sync !== false) {

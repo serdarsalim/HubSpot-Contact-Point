@@ -1977,6 +1977,55 @@
         color: #134b82;
       }
 
+      .phone-flags-exclude-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .phone-flags-option-flag,
+      .phone-flags-chip-flag {
+        width: 16px;
+        height: 12px;
+        border-radius: 2px;
+        flex: 0 0 auto;
+        box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+      }
+
+      .phone-flags-excluded-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .phone-flags-excluded-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px 4px 9px;
+        border: 1px solid #d9e5f2;
+        border-radius: 999px;
+        background: #fff;
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .phone-flags-chip-remove {
+        border: 0;
+        padding: 0 4px;
+        background: transparent;
+        color: #58708b;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        border-radius: 999px;
+      }
+
+      .phone-flags-chip-remove:hover {
+        color: #b3261e;
+      }
+
       #cloudConnectionStatus {
         grid-column: 1 / 2;
         margin: 0;
@@ -2980,6 +3029,20 @@
         color: #d8ecff;
       }
 
+      body[data-theme="dark"] .phone-flags-excluded-chip {
+        background: #1a2a3e;
+        border-color: #456181;
+        color: #d8e6f8;
+      }
+
+      body[data-theme="dark"] .phone-flags-chip-remove {
+        color: #a6bed8;
+      }
+
+      body[data-theme="dark"] .phone-flags-chip-remove:hover {
+        color: #ff8f88;
+      }
+
       body[data-theme="dark"] .field label {
         color: #9fb5cd;
       }
@@ -3336,7 +3399,39 @@
                   <span class="ios-switch-track" aria-hidden="true"></span>
                 </label>
               </div>
+              <div class="setting-toggle-card">
+                <span class="setting-toggle-copy">
+                  <span class="setting-toggle-title">Phone country flags</span>
+                  <span class="setting-toggle-desc">Show each number's country flag in HubSpot. Hover the flag for the country name.</span>
+                </span>
+                <label class="ios-switch">
+                  <input id="phoneFlagsEnabledInput" type="checkbox" role="switch" aria-label="Show country flags next to phone numbers" />
+                  <span class="ios-switch-track" aria-hidden="true"></span>
+                </label>
+              </div>
             </div>
+          </div>
+
+          <div id="phoneFlagsExcludeField" class="field settings-country-field" hidden>
+            <span class="settings-country-label">
+              <label for="phoneFlagsExcludeDropdownBtn">Don't show flags for</label>
+            </span>
+            <div id="phoneFlagsExcludeDropdown" class="country-prefix-dropdown">
+              <button id="phoneFlagsExcludeDropdownBtn" type="button" class="country-prefix-dropdown-btn">
+                Add a country
+              </button>
+              <div id="phoneFlagsExcludeDropdownPanel" class="country-prefix-dropdown-panel">
+                <input
+                  id="phoneFlagsExcludeDropdownSearch"
+                  class="country-prefix-dropdown-search"
+                  type="text"
+                  placeholder="Search country..."
+                  autocomplete="off"
+                />
+                <div id="phoneFlagsExcludeDropdownList" class="country-prefix-dropdown-list"></div>
+              </div>
+            </div>
+            <div id="phoneFlagsExcludedChips" class="phone-flags-excluded-chips" hidden></div>
           </div>
         </section>
 
@@ -3593,6 +3688,7 @@
 
     <script src="shared/messages.js"></script>
     <script src="shared/config.js"></script>
+    <script src="shared/countries.js"></script>
     <script src="vendor/tinymce/tinymce.min.js"></script>
     <script src="popup/core.js"></script>
     <script src="popup/analytics.js"></script>
