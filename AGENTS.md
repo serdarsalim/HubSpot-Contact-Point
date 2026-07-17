@@ -24,8 +24,11 @@ Main domain scope is `https://app.hubspot.com/*`.
   - Content scripts on HubSpot pages (load order matters):
     1. `shared/messages.js` (message contract constants)
     2. `shared/config.js` (timing/retry constants)
-    3. `content.js` (HubSpot DOM extraction/automation)
+    3. `shared/countries.js` (country list + phone-to-country resolver)
+    4. `vendor/darkreader/darkreader.js` (dark mode)
+    5. `content.js` (HubSpot DOM extraction/automation)
   - Background service worker: `background.js`
+  - `web_accessible_resources`: `vendor/flags/*.svg` on HubSpot pages
 
 - `background.js`
   - Handles toolbar click
@@ -36,19 +39,20 @@ Main domain scope is `https://app.hubspot.com/*`.
   - Loads shared and popup modules in this order:
     1. `shared/messages.js`
     2. `shared/config.js`
-    3. `vendor/tinymce/tinymce.min.js`
-    4. `popup/core.js`
-    5. `popup/analytics.js`
-    6. `popup/hubspotApi.js`
-    7. `popup/settings.js`
-    8. `popup/emailTemplates.js`
-    9. `popup/whatsappTemplates.js`
-    10. `popup/noteTemplates.js`
-    11. `popup/activeTabView.js`
-    12. `popup/notesFlow.js`
-    13. `popup/contactsView.js`
-    14. `popup/exportUtils.js`
-    15. `popup.js` (bootstrap/events only)
+    3. `shared/countries.js`
+    4. `vendor/tinymce/tinymce.min.js`
+    5. `popup/core.js`
+    6. `popup/analytics.js`
+    7. `popup/hubspotApi.js`
+    8. `popup/settings.js`
+    9. `popup/emailTemplates.js`
+    10. `popup/whatsappTemplates.js`
+    11. `popup/noteTemplates.js`
+    12. `popup/activeTabView.js`
+    13. `popup/notesFlow.js`
+    14. `popup/contactsView.js`
+    15. `popup/exportUtils.js`
+    16. `popup.js` (bootstrap/events only)
 
 - `popup.js`
   - Thin bootstrap/event wiring only
@@ -113,6 +117,15 @@ Main domain scope is `https://app.hubspot.com/*`.
 
 - `shared/config.js`
   - Canonical timing/retry constants shared by popup/content
+
+- `shared/countries.js`
+  - Canonical country list (`name`/`code`/`iso`) for the popup's default-prefix
+    picker and flag-exclusion picker
+  - `phoneCountry(phone)` resolves an E.164 number to `{ iso, label }` by
+    longest dial-code match; returns null without a leading `+`
+  - Mirrored in nudge (`src/lib/countries.ts`) — keep both in sync
+  - Flag assets: `vendor/flags/<iso>.svg` (flag-icons). Not Unicode emoji,
+    which render as bare letters on Windows/Chrome
 
 ## Message Contracts (Popup -> Content)
 
@@ -313,6 +326,16 @@ Manual smoke test:
 - In discussion-only mode, do not edit files, run mutating commands, or implement changes.
 - Stay in discussion-only mode until the user explicitly gives a clear go-ahead to implement.
 
+## Versioning and Release
+
+- **`manifest.json` version is always today's date: `YYYY.M.D`** (no zero
+  padding). Shipping on 17 July 2026 means `2026.7.17`. It is not semver —
+  never increment the last part as a patch number.
+- Build the package: `./build-shareable.sh` writes `shareable/`, then zip it
+  to `contact-pointshareable.zip`. Both are gitignored.
+- `./publish-webstore.sh` builds, uploads and publishes to the Web Store
+  (`--draft` stages without going live). Serdar runs the publish himself.
+
 ## Git/Repo Notes
 
 - Core extension files:
@@ -321,7 +344,8 @@ Manual smoke test:
   - `popup.html`
   - `popup.js`
   - `popup/` (modular popup logic)
-  - `shared/` (shared contracts/config)
+  - `shared/` (shared contracts/config/countries)
   - `content.js`
+  - `vendor/flags/` (flag SVGs), `vendor/darkreader/`, `vendor/tinymce/`
 - Ignore macOS metadata:
   - `.DS_Store` (via `.gitignore`)
