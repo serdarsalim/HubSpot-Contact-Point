@@ -1218,6 +1218,26 @@
   // light up without per-field wiring.
   const PHONE_TEXT_ONLY_PATTERN = /^\+[\d\s().-]{6,}\d$/;
 
+  // HubSpot re-renders the same value as either <a>+44…</a> or
+  // <a><span>+44…</span></a>, so a flag added on one pass can end up a level
+  // away from the leaf the next pass finds. Collect the flags on the whole
+  // chain of ancestors that still hold nothing but this number, so a shape
+  // change can't stack a second flag on the same value.
+  function findPhoneTextFlags(node, text) {
+    const flags = [];
+    let current = node;
+    while (current && current !== document.body) {
+      const previous = current.previousElementSibling;
+      if (previous instanceof Element && previous.classList.contains("cp-phone-flag")) {
+        flags.push(previous);
+      }
+      const parent = current.parentElement;
+      if (!parent || cleanText(parent.textContent || "") !== text) break;
+      current = parent;
+    }
+    return flags;
+  }
+
   function decorateActiveContactPhoneTextFlags() {
     if (inferObjectKindFromPath() !== "contact" || !getRecordIdFromPath()) return;
     // Toggle-off removal is handled centrally in applyInlineQuickActionsSettings.
@@ -1228,20 +1248,24 @@
       const raw = node.textContent || "";
       // Cheap guards first — this sweep runs on every enhancer pass.
       if (raw.length > 32 || raw.indexOf("+") === -1) continue;
-      const text = raw.trim();
+      const text = cleanText(raw);
       if (!PHONE_TEXT_ONLY_PATTERN.test(text)) continue;
 
-      const previous = node.previousElementSibling;
-      const existing = previous instanceof Element && previous.classList.contains("cp-phone-flag") ? previous : null;
       const country = resolvePhoneFlagCountry(text);
+      const existing = findPhoneTextFlags(node, text);
       if (!country) {
-        if (existing) existing.remove();
+        for (const flag of existing) flag.remove();
         continue;
       }
-      if (existing) {
-        if (existing.dataset.cpIso === country.iso) continue;
-        existing.remove();
+
+      // Keep the first flag that already says the right thing, drop the rest.
+      let kept = null;
+      for (const flag of existing) {
+        if (!kept && flag.dataset.cpIso === country.iso) kept = flag;
+        else flag.remove();
       }
+      if (kept) continue;
+
       const flag = createPhoneFlagElement(country);
       flag.classList.add("cp-phone-flag-inline");
       node.parentNode?.insertBefore(flag, node);

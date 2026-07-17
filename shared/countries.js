@@ -227,8 +227,7 @@
   // wrong flag. Numbers without a leading "+" stay null on purpose: their
   // country would just echo the rep's default prefix, not the contact.
   shared.phoneCountry = function phoneCountry(phone) {
-    // Tolerate tel: hrefs — HubSpot renders phone actions as tel: links.
-    const trimmed = String(phone || "").trim().replace(/^tel:/i, "");
+    const trimmed = String(phone || "").trim();
     if (!trimmed.startsWith("+")) return null;
     const digits = trimmed.slice(1).replace(/\D/g, "");
     if (!digits) return null;
