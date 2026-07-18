@@ -1366,7 +1366,7 @@
         width: 100%;
         height: 28px;
         box-sizing: border-box;
-        padding: 0 8px 0 27px;
+        padding: 0 26px 0 27px;
         border: 1px solid #cbd6e2;
         border-radius: 3px;
         background: #ffffff;
@@ -1383,6 +1383,48 @@
 
       .cp-sd-input::placeholder {
         color: #7c98b6;
+      }
+
+      .cp-sd-input::-webkit-search-cancel-button,
+      .cp-sd-input::-webkit-search-decoration {
+        -webkit-appearance: none;
+        appearance: none;
+      }
+
+      .cp-sd-clear {
+        position: absolute;
+        right: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #7c98b6;
+        cursor: pointer;
+      }
+
+      .cp-sd-clear:hover {
+        background: rgba(124, 152, 182, 0.18);
+        color: #33475b;
+      }
+
+      .cp-sd-clear svg {
+        width: 11px;
+        height: 11px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+
+      .cp-sd-input-wrap.cp-sd-has-value .cp-sd-clear {
+        display: inline-flex;
       }
 
       .cp-sd-toggle {
@@ -1490,6 +1532,11 @@
     }
   }
 
+  function syncSidebarDeclutterClearButton(inputWrap, input) {
+    if (!(inputWrap instanceof Element)) return;
+    inputWrap.classList.toggle("cp-sd-has-value", !!(input instanceof HTMLInputElement && input.value));
+  }
+
   function syncSidebarDeclutterToggleButton(button) {
     if (!(button instanceof HTMLButtonElement)) return;
     // Label names the action a click performs, not the current state.
@@ -1543,8 +1590,26 @@
     input.autocomplete = "off";
     input.setAttribute("aria-label", "Filter sidebar properties");
     input.value = sidebarDeclutterState.searchInputValue;
-    input.addEventListener("input", () => handleSidebarDeclutterSearchInput(input.value));
+    input.addEventListener("input", () => {
+      handleSidebarDeclutterSearchInput(input.value);
+      syncSidebarDeclutterClearButton(inputWrap, input);
+    });
     inputWrap.appendChild(input);
+
+    const clear = document.createElement("button");
+    clear.className = "cp-sd-clear";
+    clear.type = "button";
+    clear.setAttribute("aria-label", "Clear filter");
+    clear.setAttribute("title", "Clear filter");
+    clear.innerHTML = "<svg viewBox='0 0 12 12' aria-hidden='true'><path d='M2 2 10 10M10 2 2 10'/></svg>";
+    clear.addEventListener("click", () => {
+      input.value = "";
+      handleSidebarDeclutterSearchInput("");
+      syncSidebarDeclutterClearButton(inputWrap, input);
+      input.focus();
+    });
+    inputWrap.appendChild(clear);
+    syncSidebarDeclutterClearButton(inputWrap, input);
 
     const toggle = document.createElement("button");
     toggle.className = "cp-sd-toggle";
@@ -1575,6 +1640,7 @@
       if (input instanceof HTMLInputElement && document.activeElement !== input && input.value !== sidebarDeclutterState.searchInputValue) {
         input.value = sidebarDeclutterState.searchInputValue;
       }
+      syncSidebarDeclutterClearButton(existing.querySelector(".cp-sd-input-wrap"), input);
       return;
     }
     if (existing) existing.remove();
