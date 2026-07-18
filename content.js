@@ -1410,6 +1410,36 @@
         border-color: #7c3aed;
         color: #ffffff;
       }
+
+      .cp-sd-expand {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid #cbd6e2;
+        border-radius: 14px;
+        background: #ffffff;
+        color: #33475b;
+        cursor: pointer;
+        transition: border-color 120ms ease;
+      }
+
+      .cp-sd-expand:hover {
+        border-color: #7c98b6;
+      }
+
+      .cp-sd-expand svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1490,6 +1520,47 @@
     }
   }
 
+  // One button covers both directions: expand everything while any card is
+  // still collapsed, fold everything once the sidebar is fully open.
+  function syncSidebarDeclutterExpandButton(button) {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const sidebar = getLeftSidebarElement();
+    if (!sidebar) return;
+    let anyCollapsed = false;
+    for (const card of sidebar.querySelectorAll("[data-test-id^='card-wrapper-']")) {
+      if (findCardCollapseToggle(card, false)) {
+        anyCollapsed = true;
+        break;
+      }
+    }
+    const label = anyCollapsed ? "Expand all sections" : "Collapse all sections";
+    button.dataset.cpMode = anyCollapsed ? "expand" : "collapse";
+    button.setAttribute("title", label);
+    button.setAttribute("aria-label", label);
+    button.innerHTML = anyCollapsed
+      ? "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='m5 6 3-3 3 3'/><path d='m5 10 3 3 3-3'/></svg>"
+      : "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='m5 3 3 3 3-3'/><path d='m5 13 3-3 3 3'/></svg>";
+  }
+
+  function handleSidebarDeclutterExpandClick(button) {
+    const sidebar = getLeftSidebarElement();
+    if (!sidebar) return;
+    const cards = Array.from(sidebar.querySelectorAll("[data-test-id^='card-wrapper-']"));
+    const collapsedToggles = cards.map((card) => findCardCollapseToggle(card, false)).filter(Boolean);
+    if (collapsedToggles.length) {
+      for (const toggle of collapsedToggles) toggle.click();
+    } else {
+      for (const card of cards) {
+        const toggle = findCardCollapseToggle(card, true);
+        if (toggle) toggle.click();
+      }
+    }
+    // The user took manual control of card state; a later search-clear must
+    // not undo it.
+    sidebarDeclutterState.autoExpandedCardIds.clear();
+    syncSidebarDeclutterExpandButton(button);
+  }
+
   function syncSidebarDeclutterToggleButton(button) {
     if (!(button instanceof HTMLButtonElement)) return;
     button.setAttribute("aria-pressed", sidebarDeclutterState.hideEmpty ? "true" : "false");
@@ -1561,8 +1632,15 @@
       if (currentSidebar) applySidebarDeclutterFilters(currentSidebar);
     });
 
+    const expand = document.createElement("button");
+    expand.className = "cp-sd-expand";
+    expand.type = "button";
+    syncSidebarDeclutterExpandButton(expand);
+    expand.addEventListener("click", () => handleSidebarDeclutterExpandClick(expand));
+
     bar.appendChild(inputWrap);
     bar.appendChild(toggle);
+    bar.appendChild(expand);
     return bar;
   }
 
@@ -1570,6 +1648,7 @@
     const existing = document.getElementById(SIDEBAR_DECLUTTER_BAR_ID);
     if (existing && sidebar.contains(existing)) {
       syncSidebarDeclutterToggleButton(existing.querySelector(".cp-sd-toggle"));
+      syncSidebarDeclutterExpandButton(existing.querySelector(".cp-sd-expand"));
       const input = existing.querySelector(".cp-sd-input");
       if (input instanceof HTMLInputElement && document.activeElement !== input && input.value !== sidebarDeclutterState.searchInputValue) {
         input.value = sidebarDeclutterState.searchInputValue;
