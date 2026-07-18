@@ -13,6 +13,8 @@ This is a Chrome extension (MV3) for HubSpot contact workflows:
   - `WhatsApp` (open WhatsApp with selected template)
   - `Notes` (read/create notes via HubSpot contact page automation)
 - Run account-level actions from the currently active HubSpot contact tab
+- Sidebar declutter on record pages: injected bar with a property filter input
+  and a `Hide empty` toggle above the left-sidebar property cards
 
 Main domain scope is `https://app.hubspot.com/*`.
 
@@ -180,6 +182,10 @@ Stored in `chrome.storage.sync` (`popupSettings`):
 - `noteTemplate: string` (currently maintained as blank)
 - `rowFilterWord: string`
 - `visibleColumns: Record<string, boolean>`
+- `sidebarDeclutterEnabled: boolean` (record-page sidebar filter bar, default true)
+
+Also in `chrome.storage.local`: `popupSidebarHideEmpty` (the record-page
+`Hide empty` toggle state; device-local, synced across open HubSpot tabs).
 
 Stored in `chrome.storage.local`:
 
@@ -271,6 +277,12 @@ Import/export format in Settings is strict and current-only:
 - note submit control detection
 - email composer detection
 - subject/body field detection
+- sidebar declutter anchors: `[data-selenium-test='left-sidebar']`,
+  `[data-selenium-test='profile-properties-list']` (rows are its direct
+  children), `[data-selenium-test^='property-input-']` (value; `--` = empty),
+  `[data-test-id^='card-wrapper-']` cards with a
+  `[role='button'][aria-expanded]` collapse toggle that contains
+  `[data-selenium-test='crm-card-title']`
 
 When fixing, prefer scoped scoring heuristics over brittle class selectors.
 

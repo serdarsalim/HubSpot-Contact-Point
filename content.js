@@ -47,6 +47,9 @@
   const INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY = "popupInlineQuickActionsPosition";
   const INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS = 900;
   const CONTACT_INDEX_NEW_TAB_STYLE_ID = "cpContactIndexNewTabStyle";
+  const SIDEBAR_DECLUTTER_BAR_ID = "cpSidebarDeclutterBar";
+  const SIDEBAR_DECLUTTER_STYLE_ID = "cpSidebarDeclutterStyle";
+  const SIDEBAR_HIDE_EMPTY_LOCAL_KEY = "popupSidebarHideEmpty";
   const DARK_READER_THEME = Object.freeze({
     brightness: 100,
     contrast: 90,
@@ -103,6 +106,11 @@
           const nextSettings = changes[SETTINGS_KEY]?.newValue;
           applyHubSpotThemeMode(nextSettings?.themeMode || "light");
           applyInlineQuickActionsSettings(nextSettings);
+        }
+
+        if (areaName === "local" && Object.prototype.hasOwnProperty.call(changes, SIDEBAR_HIDE_EMPTY_LOCAL_KEY)) {
+          sidebarDeclutterState.hideEmpty = changes[SIDEBAR_HIDE_EMPTY_LOCAL_KEY]?.newValue === true;
+          scheduleContactEnhancers();
         }
 
         if (areaName === "local" && Object.prototype.hasOwnProperty.call(changes, INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY)) {
@@ -1285,6 +1293,349 @@
     }
   }
 
+  // --- Sidebar declutter (record pages) ---
+  // HubSpot's left sidebar buries the handful of filled properties under a
+  // wall of empty "--" rows across dozens of cards. This injects a filter
+  // input plus a "Hide empty" toggle above the property cards. Anchored on
+  // HubSpot's own test hooks (profile-properties-list / property-input-*),
+  // which survive their CSS class churn.
+  const SIDEBAR_EMPTY_VALUE_PATTERN = /^[-–—]{1,2}$/;
+
+  const sidebarDeclutterState = {
+    enabled: true,
+    hideEmpty: false,
+    searchQuery: "",
+    searchInputValue: "",
+    searchDebounceId: 0,
+    lastUrl: "",
+    autoExpandedCardIds: new Set()
+  };
+
+  function isRecordPageForDeclutter() {
+    return /\/record\/0-\d+\/\d+/i.test(String(location.pathname || ""));
+  }
+
+  function getLeftSidebarElement() {
+    return (
+      document.querySelector("[data-selenium-test='left-sidebar']") ||
+      document.querySelector("[data-test-id='left-sidebar']")
+    );
+  }
+
+  function ensureSidebarDeclutterStyles() {
+    if (document.getElementById(SIDEBAR_DECLUTTER_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = SIDEBAR_DECLUTTER_STYLE_ID;
+    style.textContent = `
+      .cp-sd-hidden {
+        display: none !important;
+      }
+
+      #${SIDEBAR_DECLUTTER_BAR_ID} {
+        position: sticky;
+        top: 0;
+        z-index: 8;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: #f5f8fa;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      }
+
+      .cp-sd-input-wrap {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .cp-sd-input-wrap svg {
+        position: absolute;
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 13px;
+        height: 13px;
+        stroke: #7c98b6;
+        fill: none;
+        stroke-width: 2;
+        pointer-events: none;
+      }
+
+      .cp-sd-input {
+        width: 100%;
+        height: 28px;
+        box-sizing: border-box;
+        padding: 0 8px 0 27px;
+        border: 1px solid #cbd6e2;
+        border-radius: 3px;
+        background: #ffffff;
+        color: #33475b;
+        font-size: 13px;
+        line-height: 26px;
+        outline: none;
+      }
+
+      .cp-sd-input:focus {
+        border-color: rgba(0, 208, 228, 0.5);
+        box-shadow: 0 0 4px 1px rgba(0, 208, 228, 0.3);
+      }
+
+      .cp-sd-input::placeholder {
+        color: #7c98b6;
+      }
+
+      .cp-sd-toggle {
+        flex: 0 0 auto;
+        height: 28px;
+        padding: 0 10px;
+        border: 1px solid #cbd6e2;
+        border-radius: 14px;
+        background: #ffffff;
+        color: #33475b;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 26px;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+      }
+
+      .cp-sd-toggle:hover {
+        border-color: #7c98b6;
+      }
+
+      .cp-sd-toggle[aria-pressed='true'] {
+        background: #7c3aed;
+        border-color: #7c3aed;
+        color: #ffffff;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function findCardCollapseToggle(card, expanded) {
+    if (!(card instanceof Element)) return null;
+    const want = expanded ? "true" : "false";
+    return (
+      Array.from(card.querySelectorAll(`[role='button'][aria-expanded='${want}']`)).find((toggle) =>
+        toggle.querySelector("[data-selenium-test='crm-card-title']")
+      ) || null
+    );
+  }
+
+  // Collapsed cards render no property rows, so a search can only see what is
+  // expanded. Expand everything when a search starts, remember which cards we
+  // opened, and fold exactly those back when the search is cleared.
+  function autoExpandSidebarCardsForSearch(sidebar) {
+    for (const card of sidebar.querySelectorAll("[data-test-id^='card-wrapper-']")) {
+      const toggle = findCardCollapseToggle(card, false);
+      if (!toggle) continue;
+      const cardId = card.getAttribute("data-test-id") || "";
+      if (cardId) sidebarDeclutterState.autoExpandedCardIds.add(cardId);
+      toggle.click();
+    }
+  }
+
+  function restoreAutoExpandedSidebarCards(sidebar) {
+    for (const cardId of sidebarDeclutterState.autoExpandedCardIds) {
+      const card = sidebar.querySelector(`[data-test-id="${CSS.escape(cardId)}"]`);
+      const toggle = findCardCollapseToggle(card, true);
+      if (toggle) toggle.click();
+    }
+    sidebarDeclutterState.autoExpandedCardIds.clear();
+  }
+
+  function applySidebarDeclutterFilters(sidebar) {
+    const query = sidebarDeclutterState.searchQuery;
+    // A search shows matches even when their value is empty; otherwise typing a
+    // field's name to fill it would fight the hide-empty toggle.
+    const hideEmpty = sidebarDeclutterState.hideEmpty && !query;
+
+    // Cards fold back to a title-only shell when re-collapsed; a shell must
+    // never stay hidden by a decision made against its old rows.
+    for (const card of sidebar.querySelectorAll("[data-test-id^='card-wrapper-'].cp-sd-hidden")) {
+      if (!card.querySelector("[data-selenium-test='profile-properties-list']")) {
+        card.classList.remove("cp-sd-hidden");
+      }
+    }
+
+    for (const list of sidebar.querySelectorAll("[data-selenium-test='profile-properties-list']")) {
+      let visibleCount = 0;
+      for (const row of Array.from(list.children)) {
+        if (!(row instanceof Element)) continue;
+        const valueEl = row.querySelector("[data-selenium-test^='property-input-']");
+        const valueText = cleanText(valueEl ? valueEl.textContent || "" : "");
+        const isEmpty = !valueText || SIDEBAR_EMPTY_VALUE_PATTERN.test(valueText);
+
+        let show = true;
+        if (query) {
+          const propertyName = String(valueEl?.getAttribute("data-selenium-test") || "")
+            .replace(/^property-input-/, "")
+            .replace(/_/g, " ");
+          const rowText = cleanText(row.textContent || "").toLowerCase();
+          show = rowText.includes(query) || propertyName.includes(query);
+        } else if (hideEmpty) {
+          show = !isEmpty;
+        }
+
+        row.classList.toggle("cp-sd-hidden", !show);
+        if (show) visibleCount += 1;
+      }
+
+      const card = list.closest("[data-test-id^='card-wrapper-']");
+      if (card) {
+        card.classList.toggle("cp-sd-hidden", (query || hideEmpty) && visibleCount === 0);
+      }
+    }
+  }
+
+  function syncSidebarDeclutterToggleButton(button) {
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.setAttribute("aria-pressed", sidebarDeclutterState.hideEmpty ? "true" : "false");
+    button.setAttribute(
+      "title",
+      sidebarDeclutterState.hideEmpty
+        ? "Showing only properties that have a value"
+        : "Hide properties without a value"
+    );
+  }
+
+  function handleSidebarDeclutterSearchInput(rawValue) {
+    const previousQuery = sidebarDeclutterState.searchQuery;
+    sidebarDeclutterState.searchInputValue = String(rawValue || "");
+    sidebarDeclutterState.searchQuery = cleanText(sidebarDeclutterState.searchInputValue).toLowerCase();
+
+    const sidebar = getLeftSidebarElement();
+    if (sidebar) {
+      if (sidebarDeclutterState.searchQuery && !previousQuery) {
+        autoExpandSidebarCardsForSearch(sidebar);
+      } else if (!sidebarDeclutterState.searchQuery && previousQuery) {
+        restoreAutoExpandedSidebarCards(sidebar);
+      }
+    }
+
+    if (sidebarDeclutterState.searchDebounceId) {
+      clearTimeout(sidebarDeclutterState.searchDebounceId);
+    }
+    sidebarDeclutterState.searchDebounceId = setTimeout(() => {
+      sidebarDeclutterState.searchDebounceId = 0;
+      const currentSidebar = getLeftSidebarElement();
+      if (currentSidebar) applySidebarDeclutterFilters(currentSidebar);
+    }, 120);
+  }
+
+  function createSidebarDeclutterBar() {
+    const bar = document.createElement("div");
+    bar.id = SIDEBAR_DECLUTTER_BAR_ID;
+
+    const inputWrap = document.createElement("div");
+    inputWrap.className = "cp-sd-input-wrap";
+    inputWrap.innerHTML =
+      "<svg viewBox='0 0 16 16' aria-hidden='true'><circle cx='7' cy='7' r='4.5'/><path d='M10.5 10.5 14 14' stroke-linecap='round'/></svg>";
+
+    const input = document.createElement("input");
+    input.className = "cp-sd-input";
+    input.type = "search";
+    input.placeholder = "Filter properties";
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", "Filter sidebar properties");
+    input.value = sidebarDeclutterState.searchInputValue;
+    input.addEventListener("input", () => handleSidebarDeclutterSearchInput(input.value));
+    inputWrap.appendChild(input);
+
+    const toggle = document.createElement("button");
+    toggle.className = "cp-sd-toggle";
+    toggle.type = "button";
+    toggle.textContent = "Hide empty";
+    syncSidebarDeclutterToggleButton(toggle);
+    toggle.addEventListener("click", () => {
+      sidebarDeclutterState.hideEmpty = !sidebarDeclutterState.hideEmpty;
+      syncSidebarDeclutterToggleButton(toggle);
+      try {
+        chrome.storage.local.set({ [SIDEBAR_HIDE_EMPTY_LOCAL_KEY]: sidebarDeclutterState.hideEmpty });
+      } catch (_error) {
+        // Ignore storage write failures.
+      }
+      const currentSidebar = getLeftSidebarElement();
+      if (currentSidebar) applySidebarDeclutterFilters(currentSidebar);
+    });
+
+    bar.appendChild(inputWrap);
+    bar.appendChild(toggle);
+    return bar;
+  }
+
+  function ensureSidebarDeclutterBar(sidebar) {
+    const existing = document.getElementById(SIDEBAR_DECLUTTER_BAR_ID);
+    if (existing && sidebar.contains(existing)) {
+      syncSidebarDeclutterToggleButton(existing.querySelector(".cp-sd-toggle"));
+      const input = existing.querySelector(".cp-sd-input");
+      if (input instanceof HTMLInputElement && document.activeElement !== input && input.value !== sidebarDeclutterState.searchInputValue) {
+        input.value = sidebarDeclutterState.searchInputValue;
+      }
+      return;
+    }
+    if (existing) existing.remove();
+
+    // Sit below the record highlight (photo/name/actions), above the cards.
+    const bar = createSidebarDeclutterBar();
+    let anchor = null;
+    for (const card of sidebar.querySelectorAll("[data-test-id^='card-wrapper-']")) {
+      const cardId = card.getAttribute("data-test-id") || "";
+      if (!cardId.includes("OBJECT_HIGHLIGHT")) {
+        anchor = card;
+        break;
+      }
+    }
+    if (anchor?.parentElement) {
+      anchor.parentElement.insertBefore(bar, anchor);
+    } else {
+      sidebar.insertBefore(bar, sidebar.firstChild);
+    }
+  }
+
+  function removeSidebarDeclutter() {
+    document.getElementById(SIDEBAR_DECLUTTER_BAR_ID)?.remove();
+    for (const el of document.querySelectorAll(".cp-sd-hidden")) {
+      el.classList.remove("cp-sd-hidden");
+    }
+  }
+
+  function enhanceSidebarDeclutter() {
+    if (location.href !== sidebarDeclutterState.lastUrl) {
+      // Route change: a stale filter silently hiding fields on the next record
+      // would look like data loss, so search state resets per record.
+      sidebarDeclutterState.lastUrl = location.href;
+      sidebarDeclutterState.searchQuery = "";
+      sidebarDeclutterState.searchInputValue = "";
+      sidebarDeclutterState.autoExpandedCardIds.clear();
+    }
+
+    if (!sidebarDeclutterState.enabled || !isRecordPageForDeclutter()) {
+      removeSidebarDeclutter();
+      return;
+    }
+    const sidebar = getLeftSidebarElement();
+    if (!sidebar) return;
+
+    ensureSidebarDeclutterStyles();
+    ensureSidebarDeclutterBar(sidebar);
+    applySidebarDeclutterFilters(sidebar);
+  }
+
+  function loadSidebarDeclutterLocalState() {
+    try {
+      chrome.storage.local.get(SIDEBAR_HIDE_EMPTY_LOCAL_KEY, (result) => {
+        if (chrome.runtime.lastError) return;
+        sidebarDeclutterState.hideEmpty = result?.[SIDEBAR_HIDE_EMPTY_LOCAL_KEY] === true;
+        scheduleContactEnhancers();
+      });
+    } catch (_error) {
+      // Ignore storage read failures.
+    }
+  }
+
   let contactEnhancerRafId = 0;
   let contactEnhancerObserver = null;
 
@@ -1299,6 +1650,7 @@
       enhanceContactIndexInlineButtons();
       decorateActiveContactPhoneField();
       decorateActiveContactPhoneTextFlags();
+      enhanceSidebarDeclutter();
       const ms = performance.now() - start;
       if (ms > 4) console.log(`[ContactPoint] enhancers ran in ${ms.toFixed(1)}ms`);
       return;
@@ -1306,6 +1658,7 @@
     enhanceContactIndexInlineButtons();
     decorateActiveContactPhoneField();
     decorateActiveContactPhoneTextFlags();
+    enhanceSidebarDeclutter();
   }
 
   // Coalesce bursts of DOM mutations into a single run per animation frame.
@@ -2903,6 +3256,15 @@
         hidePhoneFlagTooltip();
         for (const flag of document.querySelectorAll(".cp-phone-flag")) flag.remove();
         scheduleContactEnhancers();
+      }
+
+      if (Object.prototype.hasOwnProperty.call(source, "sidebarDeclutterEnabled")) {
+        const nextEnabled = source.sidebarDeclutterEnabled !== false;
+        if (nextEnabled !== sidebarDeclutterState.enabled) {
+          sidebarDeclutterState.enabled = nextEnabled;
+          if (!nextEnabled) removeSidebarDeclutter();
+          scheduleContactEnhancers();
+        }
       }
     }
     if (options.sync !== false) {
@@ -4762,6 +5124,7 @@
 
   applyHubSpotThemeFromSettingsStorage();
   subscribeHubSpotThemeChanges();
+  loadSidebarDeclutterLocalState();
   startContactIndexEnhancerWatcher();
   startInlineQuickActionsWatcher();
   window.addEventListener("pagehide", stopInlineQuickActionsWatcher);

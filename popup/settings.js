@@ -535,6 +535,11 @@
         queueSettingsAutosave({ immediate: true });
       });
     }
+    if (dom.sidebarDeclutterEnabledInput) {
+      dom.sidebarDeclutterEnabledInput.addEventListener("change", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
     if (dom.openContactsInBackgroundInput) {
       dom.openContactsInBackgroundInput.addEventListener("change", () => {
         void chrome.storage.local.set({
@@ -915,6 +920,7 @@
         : true,
       phoneFlagsEnabled: dom.phoneFlagsEnabledInput ? dom.phoneFlagsEnabledInput.checked : true,
       phoneFlagsExcludedIsos: getPhoneFlagsExcludedIsos(),
+      sidebarDeclutterEnabled: dom.sidebarDeclutterEnabledInput ? dom.sidebarDeclutterEnabledInput.checked : true,
       visibleColumns,
       columnWidths: App.normalizeColumnWidths(state.settings.columnWidths),
       columnOrder: App.normalizeColumnOrder(state.settings.columnOrder)
@@ -931,6 +937,9 @@
     }
     if (dom.phoneFlagsEnabledInput) {
       dom.phoneFlagsEnabledInput.checked = state.settings.phoneFlagsEnabled !== false;
+    }
+    if (dom.sidebarDeclutterEnabledInput) {
+      dom.sidebarDeclutterEnabledInput.checked = state.settings.sidebarDeclutterEnabled !== false;
     }
     syncPhoneFlagsExcludeFieldVisibility();
     renderPhoneFlagsExcludedChips();
@@ -2037,6 +2046,7 @@
     state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled !== false;
     state.settings.phoneFlagsEnabled = state.settings.phoneFlagsEnabled !== false;
     state.settings.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(state.settings.phoneFlagsExcludedIsos);
+    state.settings.sidebarDeclutterEnabled = state.settings.sidebarDeclutterEnabled !== false;
     state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
     state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud !== false;
     state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud !== false;
