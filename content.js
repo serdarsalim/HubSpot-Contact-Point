@@ -1563,11 +1563,13 @@
 
   function syncSidebarDeclutterToggleButton(button) {
     if (!(button instanceof HTMLButtonElement)) return;
+    // Label names the action a click performs, not the current state.
+    button.textContent = sidebarDeclutterState.hideEmpty ? "Show empty" : "Hide empty";
     button.setAttribute("aria-pressed", sidebarDeclutterState.hideEmpty ? "true" : "false");
     button.setAttribute(
       "title",
       sidebarDeclutterState.hideEmpty
-        ? "Showing only properties that have a value"
+        ? "Show properties without a value"
         : "Hide properties without a value"
     );
   }
@@ -1618,7 +1620,6 @@
     const toggle = document.createElement("button");
     toggle.className = "cp-sd-toggle";
     toggle.type = "button";
-    toggle.textContent = "Hide empty";
     syncSidebarDeclutterToggleButton(toggle);
     toggle.addEventListener("click", () => {
       sidebarDeclutterState.hideEmpty = !sidebarDeclutterState.hideEmpty;
