@@ -1452,6 +1452,18 @@
         border-color: #7c3aed;
         color: #ffffff;
       }
+
+      /* Every card repeats the same "Actions" dropdown; keep it for the card
+         being pointed at (or keyboard-focused) and fade out the rest. */
+      [data-selenium-test='left-sidebar'] [data-selenium-test='crm-card-actions'] {
+        opacity: 0;
+        transition: opacity 100ms ease;
+      }
+
+      [data-selenium-test='left-sidebar'] [data-test-id^='card-wrapper-']:hover [data-selenium-test='crm-card-actions'],
+      [data-selenium-test='left-sidebar'] [data-test-id^='card-wrapper-']:focus-within [data-selenium-test='crm-card-actions'] {
+        opacity: 1;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1664,6 +1676,9 @@
 
   function removeSidebarDeclutter() {
     document.getElementById(SIDEBAR_DECLUTTER_BAR_ID)?.remove();
+    // The stylesheet now carries always-on rules (hover-only card actions),
+    // so disabling the feature must drop it, not just the row classes.
+    document.getElementById(SIDEBAR_DECLUTTER_STYLE_ID)?.remove();
     for (const el of document.querySelectorAll(".cp-sd-hidden")) {
       el.classList.remove("cp-sd-hidden");
     }
