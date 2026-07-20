@@ -51,6 +51,7 @@
   const SIDEBAR_DECLUTTER_STYLE_ID = "cpSidebarDeclutterStyle";
   const SIDEBAR_HIDE_EMPTY_LOCAL_KEY = "popupSidebarHideEmpty";
   const COMPOSER_TEMPLATE_SEARCH_ROW_ID = "cpComposerTemplateSearchRow";
+  const COMPOSER_NOTE_SEARCH_ROW_ID = "cpComposerNoteSearchRow";
   const COMPOSER_TEMPLATE_SEARCH_STYLE_ID = "cpComposerTemplateSearchStyle";
   const DARK_READER_THEME = Object.freeze({
     brightness: 100,
@@ -1727,14 +1728,52 @@
   // place via the same apply path the floating widget uses.
   const composerTemplateSearchState = {
     enabled: true,
-    query: "",
-    open: false,
-    activeIndex: 0,
-    visibleTemplateIds: [],
-    busy: false,
-    dialog: null,
-    outsideClickHandler: null,
-    refreshKicked: false
+    refreshKicked: false,
+    kinds: {
+      email: {
+        query: "",
+        open: false,
+        activeIndex: 0,
+        visibleTemplateIds: [],
+        busy: false,
+        dialog: null,
+        outsideClickHandler: null
+      },
+      note: {
+        query: "",
+        open: false,
+        activeIndex: 0,
+        visibleTemplateIds: [],
+        busy: false,
+        dialog: null,
+        outsideClickHandler: null
+      }
+    }
+  };
+
+  // Per-kind wiring: which dialog hosts the row, which templates it offers,
+  // and how a pick lands. The apply functions fill the open editor without
+  // submitting anything.
+  const COMPOSER_SEARCH_KINDS = {
+    email: {
+      rowId: COMPOSER_TEMPLATE_SEARCH_ROW_ID,
+      placeholder: "Search Contact Point templates...",
+      emptyText: "No email templates yet. Create them from the Contact Point popup.",
+      findDialog: () => findOpenEmailDialog(),
+      getTemplates: () => inlineQuickActionsState.templates?.email || [],
+      apply: (template) => applyInlineEmailTemplate(template)
+    },
+    note: {
+      rowId: COMPOSER_NOTE_SEARCH_ROW_ID,
+      placeholder: "Search Contact Point note templates...",
+      emptyText: "No note templates yet. Create them from the Contact Point popup.",
+      findDialog: () => {
+        const editor = findNoteEditor();
+        return editor ? getNoteComposerRoot(editor) : null;
+      },
+      getTemplates: () => inlineQuickActionsState.templates?.note || [],
+      apply: (template) => applyInlineNoteTemplate(template)
+    }
   };
 
   function ensureComposerTemplateSearchStyles() {
@@ -1742,7 +1781,7 @@
     const style = document.createElement("style");
     style.id = COMPOSER_TEMPLATE_SEARCH_STYLE_ID;
     style.textContent = `
-      #${COMPOSER_TEMPLATE_SEARCH_ROW_ID} {
+      .cp-cts-row {
         position: relative;
         display: flex;
         align-items: center;
@@ -1914,50 +1953,48 @@
     return null;
   }
 
-  function getComposerEmailTemplates() {
-    return inlineQuickActionsState.templates?.email || [];
-  }
-
-  function getComposerVisibleTemplates() {
-    const query = normalizeSearchText(composerTemplateSearchState.query || "");
-    const templates = getComposerEmailTemplates();
+  function getComposerVisibleTemplates(kindKey) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+    const templates = COMPOSER_SEARCH_KINDS[kindKey].getTemplates();
+    const query = normalizeSearchText(kindState.query || "");
     if (!query) return templates;
     return templates.filter((template) => searchTextMatchesQuery(template?.name || "", query));
   }
 
-  function renderComposerTemplateDropdown() {
-    const row = document.getElementById(COMPOSER_TEMPLATE_SEARCH_ROW_ID);
+  function renderComposerTemplateDropdown(kindKey) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+    const row = document.getElementById(COMPOSER_SEARCH_KINDS[kindKey].rowId);
     const dropdown = row?.querySelector(".cp-cts-dropdown");
     if (!dropdown) return;
 
-    dropdown.classList.toggle("cp-cts-open", composerTemplateSearchState.open);
-    if (!composerTemplateSearchState.open) return;
+    dropdown.classList.toggle("cp-cts-open", kindState.open);
+    if (!kindState.open) return;
 
-    const all = getComposerEmailTemplates();
+    const all = COMPOSER_SEARCH_KINDS[kindKey].getTemplates();
     if (!all.length) {
-      composerTemplateSearchState.visibleTemplateIds = [];
-      dropdown.innerHTML = "<div class='cp-cts-empty'>No email templates yet. Create them from the Contact Point popup.</div>";
+      kindState.visibleTemplateIds = [];
+      dropdown.innerHTML = `<div class='cp-cts-empty'>${escapeHtml(COMPOSER_SEARCH_KINDS[kindKey].emptyText)}</div>`;
       return;
     }
 
-    const visible = getComposerVisibleTemplates();
-    composerTemplateSearchState.visibleTemplateIds = visible.map((template) => String(template.id));
+    const visible = getComposerVisibleTemplates(kindKey);
+    kindState.visibleTemplateIds = visible.map((template) => String(template.id));
     if (!visible.length) {
       dropdown.innerHTML = "<div class='cp-cts-empty'>No templates match that title.</div>";
       return;
     }
 
-    if (composerTemplateSearchState.activeIndex >= visible.length) {
-      composerTemplateSearchState.activeIndex = 0;
+    if (kindState.activeIndex >= visible.length) {
+      kindState.activeIndex = 0;
     }
 
     const cloud = visible.filter((template) => String(template?.source || "").toLowerCase() === "cloud");
     const personal = visible.filter((template) => String(template?.source || "").toLowerCase() !== "cloud");
 
     const renderItem = (template) => {
-      const index = composerTemplateSearchState.visibleTemplateIds.indexOf(String(template.id));
-      const isUsed = hasInlineTemplateBeenUsed("email", template.id);
-      const isActive = index === composerTemplateSearchState.activeIndex;
+      const index = kindState.visibleTemplateIds.indexOf(String(template.id));
+      const isUsed = hasInlineTemplateBeenUsed(kindKey, template.id);
+      const isActive = index === kindState.activeIndex;
       return (
         `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-cts-template-id='${escapeHtml(
           String(template.id)
@@ -1976,27 +2013,30 @@
       (personal.length ? "<div class='cp-cts-section'>Personal</div>" + personal.map(renderItem).join("") : "");
   }
 
-  function closeComposerTemplateDropdown() {
-    composerTemplateSearchState.open = false;
-    renderComposerTemplateDropdown();
+  function closeComposerTemplateDropdown(kindKey) {
+    composerTemplateSearchState.kinds[kindKey].open = false;
+    renderComposerTemplateDropdown(kindKey);
   }
 
-  async function handleComposerTemplateSelection(templateId) {
-    if (composerTemplateSearchState.busy) return;
-    const template = getComposerEmailTemplates().find((item) => String(item?.id || "") === String(templateId || ""));
+  async function handleComposerTemplateSelection(kindKey, templateId) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+    if (kindState.busy) return;
+    const template = COMPOSER_SEARCH_KINDS[kindKey]
+      .getTemplates()
+      .find((item) => String(item?.id || "") === String(templateId || ""));
     if (!template) return;
 
-    const row = document.getElementById(COMPOSER_TEMPLATE_SEARCH_ROW_ID);
+    const row = document.getElementById(COMPOSER_SEARCH_KINDS[kindKey].rowId);
     const input = row?.querySelector(".cp-cts-input");
-    composerTemplateSearchState.busy = true;
+    kindState.busy = true;
     if (input instanceof HTMLInputElement) input.placeholder = "Applying...";
     try {
-      await applyInlineEmailTemplate(template);
-      markInlineTemplateUsed("email", template.id);
+      await COMPOSER_SEARCH_KINDS[kindKey].apply(template);
+      markInlineTemplateUsed(kindKey, template.id);
       void trackInlineCloudTemplateUse(template);
-      composerTemplateSearchState.query = "";
+      kindState.query = "";
       if (input instanceof HTMLInputElement) input.value = "";
-      closeComposerTemplateDropdown();
+      closeComposerTemplateDropdown(kindKey);
     } catch (error) {
       const dropdown = row?.querySelector(".cp-cts-dropdown");
       if (dropdown) {
@@ -2005,39 +2045,41 @@
         )}</div>`;
       }
     } finally {
-      composerTemplateSearchState.busy = false;
-      if (input instanceof HTMLInputElement) input.placeholder = "Search Contact Point templates...";
+      kindState.busy = false;
+      if (input instanceof HTMLInputElement) input.placeholder = COMPOSER_SEARCH_KINDS[kindKey].placeholder;
     }
   }
 
-  function handleComposerSearchKeydown(event) {
-    const ids = composerTemplateSearchState.visibleTemplateIds;
+  function handleComposerSearchKeydown(kindKey, event) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+    const ids = kindState.visibleTemplateIds;
     if (event.key === "Escape") {
-      closeComposerTemplateDropdown();
+      closeComposerTemplateDropdown(kindKey);
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (!composerTemplateSearchState.open) {
-        composerTemplateSearchState.open = true;
+      if (!kindState.open) {
+        kindState.open = true;
       } else if (ids.length) {
         const delta = event.key === "ArrowDown" ? 1 : -1;
-        composerTemplateSearchState.activeIndex =
-          (composerTemplateSearchState.activeIndex + delta + ids.length) % ids.length;
+        kindState.activeIndex = (kindState.activeIndex + delta + ids.length) % ids.length;
       }
-      renderComposerTemplateDropdown();
+      renderComposerTemplateDropdown(kindKey);
       return;
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      const id = ids[composerTemplateSearchState.activeIndex] || ids[0];
-      if (id) void handleComposerTemplateSelection(id);
+      const id = ids[kindState.activeIndex] || ids[0];
+      if (id) void handleComposerTemplateSelection(kindKey, id);
     }
   }
 
-  function mountComposerTemplateSearchRow(dialog) {
+  function mountComposerTemplateSearchRow(kindKey, dialog) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
     const row = document.createElement("div");
-    row.id = COMPOSER_TEMPLATE_SEARCH_ROW_ID;
+    row.id = COMPOSER_SEARCH_KINDS[kindKey].rowId;
+    row.className = "cp-cts-row";
 
     const bolt = document.createElement("span");
     bolt.className = "cp-cts-bolt";
@@ -2053,20 +2095,20 @@
     const input = document.createElement("input");
     input.className = "cp-cts-input";
     input.type = "text";
-    input.placeholder = "Search Contact Point templates...";
+    input.placeholder = COMPOSER_SEARCH_KINDS[kindKey].placeholder;
     input.autocomplete = "off";
-    input.setAttribute("aria-label", "Search Contact Point templates");
+    input.setAttribute("aria-label", COMPOSER_SEARCH_KINDS[kindKey].placeholder);
     input.addEventListener("focus", () => {
-      composerTemplateSearchState.open = true;
-      renderComposerTemplateDropdown();
+      kindState.open = true;
+      renderComposerTemplateDropdown(kindKey);
     });
     input.addEventListener("input", () => {
-      composerTemplateSearchState.query = input.value;
-      composerTemplateSearchState.activeIndex = 0;
-      composerTemplateSearchState.open = true;
-      renderComposerTemplateDropdown();
+      kindState.query = input.value;
+      kindState.activeIndex = 0;
+      kindState.open = true;
+      renderComposerTemplateDropdown(kindKey);
     });
-    input.addEventListener("keydown", handleComposerSearchKeydown);
+    input.addEventListener("keydown", (event) => handleComposerSearchKeydown(kindKey, event));
     inputWrap.appendChild(input);
 
     const dropdown = document.createElement("div");
@@ -2077,17 +2119,18 @@
       const item = event.target instanceof Element ? event.target.closest("[data-cts-template-id]") : null;
       if (!item) return;
       event.preventDefault();
-      void handleComposerTemplateSelection(item.getAttribute("data-cts-template-id"));
+      void handleComposerTemplateSelection(kindKey, item.getAttribute("data-cts-template-id"));
     });
 
     row.appendChild(bolt);
     row.appendChild(inputWrap);
     row.appendChild(dropdown);
 
-    // The tab list itself often lives inside a flex row; climbing to the
-    // first ancestor spanning (nearly) the dialog width puts our row on its
-    // own full-width line below the tabs instead of inline with them.
-    const tabRow = findComposerTabRow(dialog);
+    // Email composer: below its tab bar. The tab list itself lives inside a
+    // flex row, so climb to the first ancestor spanning (nearly) the dialog
+    // width to get an own full-width line. Note composer has no tab bar; the
+    // row goes at the top of the dialog.
+    const tabRow = kindKey === "email" ? findComposerTabRow(dialog) : null;
     if (tabRow?.parentElement) {
       const dialogWidth = dialog.getBoundingClientRect().width || 0;
       let anchor = tabRow;
@@ -2100,11 +2143,11 @@
       dialog.insertBefore(row, dialog.firstChild);
     }
 
-    composerTemplateSearchState.outsideClickHandler = (event) => {
+    kindState.outsideClickHandler = (event) => {
       if (!(event.target instanceof Node) || !row.isConnected) return;
-      if (!row.contains(event.target)) closeComposerTemplateDropdown();
+      if (!row.contains(event.target)) closeComposerTemplateDropdown(kindKey);
     };
-    document.addEventListener("mousedown", composerTemplateSearchState.outsideClickHandler, true);
+    document.addEventListener("mousedown", kindState.outsideClickHandler, true);
 
     // The widget only loads templates when it mounts; the composer row must
     // not depend on that, so it triggers its own load once per mount.
@@ -2112,21 +2155,48 @@
       composerTemplateSearchState.refreshKicked = true;
       void refreshInlineQuickActionsData().then(() => {
         composerTemplateSearchState.refreshKicked = false;
-        if (row.isConnected && composerTemplateSearchState.open) renderComposerTemplateDropdown();
+        if (row.isConnected && kindState.open) renderComposerTemplateDropdown(kindKey);
       });
     }
   }
 
-  function removeComposerTemplateSearch() {
-    document.getElementById(COMPOSER_TEMPLATE_SEARCH_ROW_ID)?.remove();
-    if (composerTemplateSearchState.outsideClickHandler) {
-      document.removeEventListener("mousedown", composerTemplateSearchState.outsideClickHandler, true);
-      composerTemplateSearchState.outsideClickHandler = null;
+  function removeComposerTemplateSearchKind(kindKey) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+    document.getElementById(COMPOSER_SEARCH_KINDS[kindKey].rowId)?.remove();
+    if (kindState.outsideClickHandler) {
+      document.removeEventListener("mousedown", kindState.outsideClickHandler, true);
+      kindState.outsideClickHandler = null;
     }
-    composerTemplateSearchState.dialog = null;
-    composerTemplateSearchState.open = false;
-    composerTemplateSearchState.query = "";
-    composerTemplateSearchState.activeIndex = 0;
+    kindState.dialog = null;
+    kindState.open = false;
+    kindState.query = "";
+    kindState.activeIndex = 0;
+  }
+
+  function removeComposerTemplateSearch() {
+    for (const kindKey of Object.keys(COMPOSER_SEARCH_KINDS)) {
+      removeComposerTemplateSearchKind(kindKey);
+    }
+  }
+
+  function ensureComposerTemplateSearchKind(kindKey) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+
+    // Cheap path first: row alive inside a still-connected dialog.
+    const existingRow = document.getElementById(COMPOSER_SEARCH_KINDS[kindKey].rowId);
+    if (existingRow && kindState.dialog?.isConnected && kindState.dialog.contains(existingRow)) {
+      return;
+    }
+    // Full teardown before any remount so a dialog swap can't leak the old
+    // outside-click listener.
+    removeComposerTemplateSearchKind(kindKey);
+
+    const dialog = COMPOSER_SEARCH_KINDS[kindKey].findDialog();
+    if (!(dialog instanceof Element)) return;
+
+    kindState.dialog = dialog;
+    ensureComposerTemplateSearchStyles();
+    mountComposerTemplateSearchRow(kindKey, dialog);
   }
 
   function ensureComposerTemplateSearch() {
@@ -2134,26 +2204,9 @@
       removeComposerTemplateSearch();
       return;
     }
-
-    // Cheap path first: row alive inside a still-connected dialog.
-    const existingRow = document.getElementById(COMPOSER_TEMPLATE_SEARCH_ROW_ID);
-    if (
-      existingRow &&
-      composerTemplateSearchState.dialog?.isConnected &&
-      composerTemplateSearchState.dialog.contains(existingRow)
-    ) {
-      return;
+    for (const kindKey of Object.keys(COMPOSER_SEARCH_KINDS)) {
+      ensureComposerTemplateSearchKind(kindKey);
     }
-    // Full teardown before any remount so a dialog swap can't leak the old
-    // outside-click listener.
-    removeComposerTemplateSearch();
-
-    const dialog = findOpenEmailDialog();
-    if (!dialog) return;
-
-    composerTemplateSearchState.dialog = dialog;
-    ensureComposerTemplateSearchStyles();
-    mountComposerTemplateSearchRow(dialog);
   }
 
   let contactEnhancerRafId = 0;
@@ -3712,6 +3765,17 @@
   async function openEmailAndApplyTemplateOnPage(subject, body, bodyHtml = "") {
     await openEmailComposerOnPage();
     await applyEmailTemplateOnPage(subject, body, bodyHtml);
+  }
+
+  async function openNoteComposerUiOnPage() {
+    for (let i = 0; i < TIMING.noteComposerOpenAttempts; i += 1) {
+      const editor = findNoteEditor();
+      if (editor && getNoteComposerRoot(editor)) return;
+      if (i === 0 || i % 3 === 0) clickActivitiesTab();
+      if (i === 1 || i % 3 === 1) clickNotesActivityTab();
+      clickNoteTrigger();
+      await sleep(TIMING.noteComposerOpenDelayMs);
+    }
   }
 
   const inlineQuickActionsState = {
@@ -5358,31 +5422,34 @@
       return;
     }
 
-    // With the in-composer template search active the widget's email button
-    // just opens the composer, like HubSpot's own Email action; the search
-    // row takes over from there. With it disabled, fall through to the old
-    // template panel so templates stay reachable.
-    if (selectedKind === "email" && composerTemplateSearchState.enabled) {
+    // With the in-composer template search active, the widget's email and
+    // note buttons just open the matching composer, like HubSpot's own
+    // actions; the search row takes over from there. With it disabled, fall
+    // through to the old template panels so templates stay reachable.
+    if ((selectedKind === "email" || selectedKind === "note") && composerTemplateSearchState.enabled) {
       setInlineQuickActionsBusy(true);
       setInlineQuickActionsStatus("");
       try {
         renderInlineQuickActionsPanel("");
-        if (!findOpenEmailDialog()) {
-          // Same route HubSpot's own Email action uses: the ?interaction=email
+        if (!COMPOSER_SEARCH_KINDS[selectedKind].findDialog()) {
+          // Same route HubSpot's own actions use: the ?interaction=<kind>
           // record URL opens the composer on load. DOM-click automation is
           // only the fallback when the route context can't be built.
-          const interactionUrl = buildCurrentContactInteractionUrl("email");
+          const interactionUrl = buildCurrentContactInteractionUrl(selectedKind);
           if (interactionUrl) {
             location.assign(interactionUrl);
             return;
           }
-          await openEmailComposerOnPage();
-          if (!findOpenEmailDialog()) throw new Error("Could not open the email composer.");
+          if (selectedKind === "email") await openEmailComposerOnPage();
+          else await openNoteComposerUiOnPage();
+          if (!COMPOSER_SEARCH_KINDS[selectedKind].findDialog()) {
+            throw new Error(`Could not open the ${selectedKind} composer.`);
+          }
         }
         setInlineQuickActionsStatus("");
       } catch (error) {
-        const reason = cleanText(String(error?.message || error || "Could not open the email composer."));
-        setInlineQuickActionsStatus(reason || "Could not open the email composer.", "error");
+        const reason = cleanText(String(error?.message || error || "Could not open the composer."));
+        setInlineQuickActionsStatus(reason || "Could not open the composer.", "error");
       } finally {
         setInlineQuickActionsBusy(false);
       }
@@ -5527,7 +5594,7 @@
           <span class='cp-inline-divider'>|</span>
           <button type='button' class='cp-inline-action-btn' data-kind='email' aria-label='${composerTemplateSearchState.enabled ? "Write email" : "Email templates"}' title='${composerTemplateSearchState.enabled ? "Write email" : "Email templates"}'>${inlineActionIcon("email")}</button>
           <span class='cp-inline-divider'>|</span>
-          <button type='button' class='cp-inline-action-btn' data-kind='note' aria-label='Note templates' title='Note templates'>${inlineActionIcon("note")}</button>
+          <button type='button' class='cp-inline-action-btn' data-kind='note' aria-label='${composerTemplateSearchState.enabled ? "Write note" : "Note templates"}' title='${composerTemplateSearchState.enabled ? "Write note" : "Note templates"}'>${inlineActionIcon("note")}</button>
           <span class='cp-inline-divider'>|</span>
           <button type='button' class='cp-inline-action-btn' data-kind='task' aria-label='Create task' title='Create task'>${inlineActionIcon("task")}</button>
         </div>
