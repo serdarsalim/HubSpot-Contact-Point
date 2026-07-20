@@ -1184,36 +1184,46 @@
   // chain of ancestors that still hold nothing but this number, so a shape
   // change can't stack a second flag on the same value.
   function findPhoneTextFlags(node, text) {
-    const flags = [];
-    let current = node;
-    while (current && current !== document.body) {
-      const previous = current.previousElementSibling;
-      if (previous instanceof Element && previous.classList.contains("cp-phone-flag")) {
-        flags.push(previous);
-      }
-      const parent = current.parentElement;
-      if (!parent || cleanText(parent.textContent || "") !== text) break;
-      current = parent;
-    }
-    return flags;
+    return collectPhoneTextMarks(node, text, "cp-phone-flag");
   }
 
   // WhatsApp buttons anchor on the same always-visible number text the flags
   // use: HubSpot's tel: link lives in the property's hover cluster (next to
   // Details/edit), so anything anchored there only shows on hover.
-  function findPhoneTextWaButtons(node, text) {
-    const buttons = [];
+  //
+  // Flags and buttons interleave around the number, and a React reshape can
+  // strand an old [flag][button] pair one level out from the new leaf. Each
+  // chain level therefore scans BOTH directions across runs of our own marks
+  // (either kind); a single-kind, single-direction walk cannot see a stale
+  // flag sitting behind a stale button. Collection starts at the leaf, so
+  // dedup keeps the mark nearest the number and drops stranded outer ones.
+  function isCpPhoneMark(el) {
+    return (
+      el instanceof Element &&
+      (el.classList.contains("cp-phone-flag") || el.classList.contains("cp-active-contact-whatsapp-btn"))
+    );
+  }
+
+  function collectPhoneTextMarks(node, text, matchClass) {
+    const found = [];
     let current = node;
     while (current && current !== document.body) {
-      const next = current.nextElementSibling;
-      if (next instanceof Element && next.classList.contains("cp-active-contact-whatsapp-btn")) {
-        buttons.push(next);
+      for (const dir of ["previousElementSibling", "nextElementSibling"]) {
+        let sibling = current[dir];
+        while (isCpPhoneMark(sibling)) {
+          if (sibling.classList.contains(matchClass)) found.push(sibling);
+          sibling = sibling[dir];
+        }
       }
       const parent = current.parentElement;
       if (!parent || cleanText(parent.textContent || "") !== text) break;
       current = parent;
     }
-    return buttons;
+    return found;
+  }
+
+  function findPhoneTextWaButtons(node, text) {
+    return collectPhoneTextMarks(node, text, "cp-active-contact-whatsapp-btn");
   }
 
   function ensureInlinePhoneWaButton(node, text) {
