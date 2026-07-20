@@ -828,7 +828,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        margin-left: 6px;
+        margin-left: 9px;
         vertical-align: middle;
       }
 
@@ -1234,10 +1234,14 @@
       return;
     }
 
+    // Position is part of correctness: only the button sitting immediately
+    // after the number survives, so a stale left-side survivor can never win.
     let kept = null;
     for (const button of existing) {
-      if (!kept && button.dataset.waUrl === waUrl) kept = button;
-      else button.remove();
+      if (!kept && button === node.nextElementSibling && button.dataset.waUrl === waUrl) kept = button;
+    }
+    for (const button of existing) {
+      if (button !== kept) button.remove();
     }
     if (kept) return;
 
@@ -1269,11 +1273,14 @@
         continue;
       }
 
-      // Keep the first flag that already says the right thing, drop the rest.
+      // Keep only a flag immediately before the number with the right
+      // country; anything elsewhere in the chain is a stale survivor.
       let kept = null;
       for (const flag of existing) {
-        if (!kept && flag.dataset.cpIso === country.iso) kept = flag;
-        else flag.remove();
+        if (!kept && flag === node.previousElementSibling && flag.dataset.cpIso === country.iso) kept = flag;
+      }
+      for (const flag of existing) {
+        if (flag !== kept) flag.remove();
       }
       if (kept) continue;
 
