@@ -1098,11 +1098,17 @@
     button.className = "cp-active-contact-whatsapp-btn";
     button.dataset.waUrl = waUrl;
     button.setAttribute("aria-label", "Open number in WhatsApp");
-    button.setAttribute("title", "Open in WhatsApp");
+    button.setAttribute("title", "WhatsApp templates");
     button.innerHTML = inlineActionIcon("whatsapp");
     button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
+      // With template search enabled the button anchors the template popover;
+      // otherwise it keeps the classic instant-open behavior.
+      if (composerTemplateSearchState.enabled) {
+        openWaTemplatePopover(button);
+        return;
+      }
       await openOrReuseWhatsappTab(waUrl);
     });
     return button;
@@ -1939,6 +1945,31 @@
         font-size: 12.5px;
         color: #7c98b6;
       }
+
+      /* WhatsApp template popover, anchored to the inline phone button. */
+      .cp-wa-pop {
+        position: fixed;
+        z-index: 2147483647;
+        width: 300px;
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 6px;
+        background: #ffffff;
+        border: 1px solid #dfe3eb;
+        border-radius: 8px;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+      }
+
+      .cp-wa-pop .cp-cts-input-wrap {
+        margin: 2px 2px 6px;
+      }
+
+      /* The row our button lives in must never be hover-gated by HubSpot. */
+      .cp-active-contact-phone-action-wrap,
+      .cp-active-contact-whatsapp-btn {
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -2218,6 +2249,213 @@
     for (const kindKey of Object.keys(COMPOSER_SEARCH_KINDS)) {
       ensureComposerTemplateSearchKind(kindKey);
     }
+  }
+
+  // --- WhatsApp template popover ---
+  // WhatsApp has no HubSpot composer to host a search row, so its templates
+  // anchor to the inline phone button instead: click opens a popover with the
+  // same search pattern, picking a template opens WhatsApp with the message
+  // filled. "Open without template" keeps the old one-click path.
+  const waTemplatePopoverState = {
+    open: false,
+    query: "",
+    activeIndex: 0,
+    visibleIds: [],
+    busy: false,
+    el: null,
+    anchorBtn: null,
+    outsideHandler: null,
+    scrollHandler: null
+  };
+
+  function closeWaTemplatePopover() {
+    waTemplatePopoverState.el?.remove();
+    if (waTemplatePopoverState.outsideHandler) {
+      document.removeEventListener("mousedown", waTemplatePopoverState.outsideHandler, true);
+      waTemplatePopoverState.outsideHandler = null;
+    }
+    if (waTemplatePopoverState.scrollHandler) {
+      window.removeEventListener("scroll", waTemplatePopoverState.scrollHandler, true);
+      waTemplatePopoverState.scrollHandler = null;
+    }
+    waTemplatePopoverState.el = null;
+    waTemplatePopoverState.anchorBtn = null;
+    waTemplatePopoverState.open = false;
+    waTemplatePopoverState.query = "";
+    waTemplatePopoverState.activeIndex = 0;
+    waTemplatePopoverState.visibleIds = [];
+  }
+
+  function getWaPopoverVisibleTemplates() {
+    const templates = inlineQuickActionsState.templates?.whatsapp || [];
+    const query = normalizeSearchText(waTemplatePopoverState.query || "");
+    if (!query) return templates;
+    return templates.filter((template) => searchTextMatchesQuery(template?.name || "", query));
+  }
+
+  function renderWaTemplatePopoverList() {
+    const list = waTemplatePopoverState.el?.querySelector(".cp-wa-pop-list");
+    if (!list) return;
+
+    const visible = getWaPopoverVisibleTemplates();
+    // Index 0 is always the plain-open entry so Enter with no typing keeps
+    // the old instant behavior one keypress away.
+    waTemplatePopoverState.visibleIds = ["__plain__", ...visible.map((template) => String(template.id))];
+    if (waTemplatePopoverState.activeIndex >= waTemplatePopoverState.visibleIds.length) {
+      waTemplatePopoverState.activeIndex = 0;
+    }
+
+    const cloud = visible.filter((template) => String(template?.source || "").toLowerCase() === "cloud");
+    const personal = visible.filter((template) => String(template?.source || "").toLowerCase() !== "cloud");
+
+    const renderItem = (template) => {
+      const index = waTemplatePopoverState.visibleIds.indexOf(String(template.id));
+      const isUsed = hasInlineTemplateBeenUsed("whatsapp", template.id);
+      const isActive = index === waTemplatePopoverState.activeIndex;
+      return (
+        `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-wa-template-id='${escapeHtml(
+          String(template.id)
+        )}'>` +
+        `<span class='cp-cts-item-label'>${escapeHtml(template.name || "Untitled")}</span>` +
+        "<span class='cp-cts-item-meta'>" +
+        `${String(template?.source || "").toLowerCase() === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
+        `<span class='cp-cts-check ${isUsed ? "is-used" : ""}' aria-hidden='true'>✓</span>` +
+        "</span>" +
+        "</button>"
+      );
+    };
+
+    const plainActive = waTemplatePopoverState.activeIndex === 0;
+    list.innerHTML =
+      `<button type='button' class='cp-cts-item ${plainActive ? "cp-cts-active" : ""}' data-wa-template-id='__plain__'>` +
+      "<span class='cp-cts-item-label'>Open without template</span>" +
+      "<span class='cp-cts-item-meta'><span aria-hidden='true'>↗</span></span>" +
+      "</button>" +
+      (cloud.length ? "<div class='cp-cts-section'>Cloud</div>" + cloud.map(renderItem).join("") : "") +
+      (personal.length ? "<div class='cp-cts-section'>Personal</div>" + personal.map(renderItem).join("") : "") +
+      (!visible.length && waTemplatePopoverState.query
+        ? "<div class='cp-cts-empty'>No templates match that title.</div>"
+        : "");
+  }
+
+  async function handleWaPopoverSelection(templateId) {
+    if (waTemplatePopoverState.busy) return;
+    const waUrl = String(waTemplatePopoverState.anchorBtn?.dataset.waUrl || "");
+
+    if (templateId === "__plain__") {
+      closeWaTemplatePopover();
+      if (waUrl) await openOrReuseWhatsappTab(waUrl);
+      return;
+    }
+
+    const template = (inlineQuickActionsState.templates?.whatsapp || []).find(
+      (item) => String(item?.id || "") === String(templateId || "")
+    );
+    if (!template) return;
+
+    waTemplatePopoverState.busy = true;
+    try {
+      await applyInlineWhatsappTemplate(template);
+      markInlineTemplateUsed("whatsapp", template.id);
+      void trackInlineCloudTemplateUse(template);
+      closeWaTemplatePopover();
+    } catch (error) {
+      const list = waTemplatePopoverState.el?.querySelector(".cp-wa-pop-list");
+      if (list) {
+        list.innerHTML = `<div class='cp-cts-empty'>${escapeHtml(
+          cleanText(String(error?.message || error || "Could not open WhatsApp."))
+        )}</div>`;
+      }
+    } finally {
+      waTemplatePopoverState.busy = false;
+    }
+  }
+
+  function openWaTemplatePopover(button) {
+    if (waTemplatePopoverState.open && waTemplatePopoverState.anchorBtn === button) {
+      closeWaTemplatePopover();
+      return;
+    }
+    closeWaTemplatePopover();
+
+    ensureComposerTemplateSearchStyles();
+    const pop = document.createElement("div");
+    pop.className = "cp-wa-pop";
+
+    const inputWrap = document.createElement("div");
+    inputWrap.className = "cp-cts-input-wrap";
+    inputWrap.innerHTML =
+      "<svg viewBox='0 0 16 16' aria-hidden='true'><circle cx='7' cy='7' r='4.5'/><path d='M10.5 10.5 14 14' stroke-linecap='round'/></svg>";
+    const input = document.createElement("input");
+    input.className = "cp-cts-input";
+    input.type = "text";
+    input.placeholder = "Search WhatsApp templates...";
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", "Search WhatsApp templates");
+    input.addEventListener("input", () => {
+      waTemplatePopoverState.query = input.value;
+      waTemplatePopoverState.activeIndex = waTemplatePopoverState.query ? 1 : 0;
+      renderWaTemplatePopoverList();
+    });
+    input.addEventListener("keydown", (event) => {
+      const ids = waTemplatePopoverState.visibleIds;
+      if (event.key === "Escape") {
+        closeWaTemplatePopover();
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (ids.length) {
+          const delta = event.key === "ArrowDown" ? 1 : -1;
+          waTemplatePopoverState.activeIndex = (waTemplatePopoverState.activeIndex + delta + ids.length) % ids.length;
+          renderWaTemplatePopoverList();
+        }
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const id = ids[waTemplatePopoverState.activeIndex] || ids[0];
+        if (id) void handleWaPopoverSelection(id);
+      }
+    });
+    inputWrap.appendChild(input);
+
+    const list = document.createElement("div");
+    list.className = "cp-wa-pop-list";
+    list.addEventListener("mousedown", (event) => {
+      const item = event.target instanceof Element ? event.target.closest("[data-wa-template-id]") : null;
+      if (!item) return;
+      event.preventDefault();
+      void handleWaPopoverSelection(item.getAttribute("data-wa-template-id"));
+    });
+
+    pop.appendChild(inputWrap);
+    pop.appendChild(list);
+    document.body.appendChild(pop);
+
+    const rect = button.getBoundingClientRect();
+    const width = 300;
+    pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+    pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 60)}px`;
+
+    waTemplatePopoverState.el = pop;
+    waTemplatePopoverState.anchorBtn = button;
+    waTemplatePopoverState.open = true;
+
+    waTemplatePopoverState.outsideHandler = (event) => {
+      if (!(event.target instanceof Node)) return;
+      if (!pop.contains(event.target) && event.target !== button) closeWaTemplatePopover();
+    };
+    document.addEventListener("mousedown", waTemplatePopoverState.outsideHandler, true);
+    // The popover is fixed-position; any scroll shifts its anchor away.
+    waTemplatePopoverState.scrollHandler = () => closeWaTemplatePopover();
+    window.addEventListener("scroll", waTemplatePopoverState.scrollHandler, true);
+
+    renderWaTemplatePopoverList();
+    void refreshInlineQuickActionsData().then(() => {
+      if (waTemplatePopoverState.open) renderWaTemplatePopoverList();
+    });
+    input.focus();
   }
 
   let contactEnhancerRafId = 0;
