@@ -1747,6 +1747,9 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        width: 100%;
+        flex: 1 1 100%;
+        box-sizing: border-box;
         padding: 8px 16px;
         background: #ffffff;
         border-bottom: 1px solid #dfe3eb;
@@ -2077,9 +2080,18 @@
     row.appendChild(inputWrap);
     row.appendChild(dropdown);
 
+    // The tab list itself often lives inside a flex row; climbing to the
+    // first ancestor spanning (nearly) the dialog width puts our row on its
+    // own full-width line below the tabs instead of inline with them.
     const tabRow = findComposerTabRow(dialog);
     if (tabRow?.parentElement) {
-      tabRow.parentElement.insertBefore(row, tabRow.nextSibling);
+      const dialogWidth = dialog.getBoundingClientRect().width || 0;
+      let anchor = tabRow;
+      while (anchor.parentElement && anchor.parentElement !== dialog) {
+        if (anchor.getBoundingClientRect().width >= dialogWidth * 0.85) break;
+        anchor = anchor.parentElement;
+      }
+      anchor.parentElement.insertBefore(row, anchor.nextSibling);
     } else {
       dialog.insertBefore(row, dialog.firstChild);
     }
