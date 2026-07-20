@@ -5367,8 +5367,18 @@
       setInlineQuickActionsStatus("");
       try {
         renderInlineQuickActionsPanel("");
-        await openEmailComposerOnPage();
-        if (!findOpenEmailDialog()) throw new Error("Could not open the email composer.");
+        if (!findOpenEmailDialog()) {
+          // Same route HubSpot's own Email action uses: the ?interaction=email
+          // record URL opens the composer on load. DOM-click automation is
+          // only the fallback when the route context can't be built.
+          const interactionUrl = buildCurrentContactInteractionUrl("email");
+          if (interactionUrl) {
+            location.assign(interactionUrl);
+            return;
+          }
+          await openEmailComposerOnPage();
+          if (!findOpenEmailDialog()) throw new Error("Could not open the email composer.");
+        }
         setInlineQuickActionsStatus("");
       } catch (error) {
         const reason = cleanText(String(error?.message || error || "Could not open the email composer."));
