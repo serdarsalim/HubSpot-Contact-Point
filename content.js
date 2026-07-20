@@ -2418,8 +2418,12 @@
       if (!pop.contains(event.target) && event.target !== button) closeWaTemplatePopover();
     };
     document.addEventListener("mousedown", waTemplatePopoverState.outsideHandler, true);
-    // The popover is fixed-position; any scroll shifts its anchor away.
-    waTemplatePopoverState.scrollHandler = () => closeWaTemplatePopover();
+    // The popover is fixed-position; a page scroll shifts its anchor away.
+    // Scrolling inside the popover's own template list must not close it.
+    waTemplatePopoverState.scrollHandler = (event) => {
+      if (event.target instanceof Node && pop.contains(event.target)) return;
+      closeWaTemplatePopover();
+    };
     window.addEventListener("scroll", waTemplatePopoverState.scrollHandler, true);
 
     renderWaTemplatePopoverList();
