@@ -3698,16 +3698,19 @@
     return true;
   }
 
-  async function openEmailAndApplyTemplateOnPage(subject, body, bodyHtml = "") {
+  async function openEmailComposerOnPage() {
     for (let i = 0; i < TIMING.emailComposerOpenAttempts; i += 1) {
       const existing = findOpenEmailDialog();
-      if (existing) break;
+      if (existing) return;
       if (i === 0 || i % 3 === 0) clickActivitiesTab();
       if (i === 1 || i % 3 === 1) clickEmailActivityTab();
       clickEmailComposerTrigger();
       await sleep(TIMING.emailComposerOpenDelayMs);
     }
+  }
 
+  async function openEmailAndApplyTemplateOnPage(subject, body, bodyHtml = "") {
+    await openEmailComposerOnPage();
     await applyEmailTemplateOnPage(subject, body, bodyHtml);
   }
 
@@ -5355,6 +5358,27 @@
       return;
     }
 
+    // With the in-composer template search active the widget's email button
+    // just opens the composer, like HubSpot's own Email action; the search
+    // row takes over from there. With it disabled, fall through to the old
+    // template panel so templates stay reachable.
+    if (selectedKind === "email" && composerTemplateSearchState.enabled) {
+      setInlineQuickActionsBusy(true);
+      setInlineQuickActionsStatus("");
+      try {
+        renderInlineQuickActionsPanel("");
+        await openEmailComposerOnPage();
+        if (!findOpenEmailDialog()) throw new Error("Could not open the email composer.");
+        setInlineQuickActionsStatus("");
+      } catch (error) {
+        const reason = cleanText(String(error?.message || error || "Could not open the email composer."));
+        setInlineQuickActionsStatus(reason || "Could not open the email composer.", "error");
+      } finally {
+        setInlineQuickActionsBusy(false);
+      }
+      return;
+    }
+
     await refreshInlineQuickActionsData();
 
     if (inlineQuickActionsState.activeKind === selectedKind) {
@@ -5491,7 +5515,7 @@
         <div class='cp-inline-actions-row'>
           <button type='button' class='cp-inline-action-btn' data-kind='whatsapp' aria-label='WhatsApp templates' title='WhatsApp templates'>${inlineActionIcon("whatsapp")}</button>
           <span class='cp-inline-divider'>|</span>
-          <button type='button' class='cp-inline-action-btn' data-kind='email' aria-label='Email templates' title='Email templates'>${inlineActionIcon("email")}</button>
+          <button type='button' class='cp-inline-action-btn' data-kind='email' aria-label='${composerTemplateSearchState.enabled ? "Write email" : "Email templates"}' title='${composerTemplateSearchState.enabled ? "Write email" : "Email templates"}'>${inlineActionIcon("email")}</button>
           <span class='cp-inline-divider'>|</span>
           <button type='button' class='cp-inline-action-btn' data-kind='note' aria-label='Note templates' title='Note templates'>${inlineActionIcon("note")}</button>
           <span class='cp-inline-divider'>|</span>
