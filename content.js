@@ -1757,9 +1757,20 @@
   const COMPOSER_SEARCH_KINDS = {
     email: {
       rowId: COMPOSER_TEMPLATE_SEARCH_ROW_ID,
-      placeholder: "Search Contact Point templates...",
+      placeholder: "Search Contact Point email templates...",
       emptyText: "No email templates yet. Create them from the Contact Point popup.",
-      findDialog: () => findOpenEmailDialog(),
+      findDialog: () => {
+        // The task composer contains "Send reminder", which scores high
+        // enough on findOpenEmailDialog's text heuristic to misdetect it as
+        // an email dialog. A real email composer always has a Subject field
+        // and no task form.
+        const dialog = findOpenEmailDialog();
+        if (!dialog) return null;
+        const text = elementText(dialog).toLowerCase();
+        if (!text.includes("subject")) return null;
+        if (text.includes("enter your task") || text.includes("task type")) return null;
+        return dialog;
+      },
       getTemplates: () => inlineQuickActionsState.templates?.email || [],
       apply: (template) => applyInlineEmailTemplate(template)
     },
