@@ -1748,7 +1748,11 @@
         align-items: center;
         gap: 8px;
         width: 100%;
-        flex: 1 1 100%;
+        /* flex-basis 100% wraps to an own line in row parents, but grow must
+           stay 0: in a column flex parent grow would stretch the row to fill
+           the dialog's free height. */
+        flex: 0 0 100%;
+        max-height: 47px;
         box-sizing: border-box;
         padding: 8px 16px;
         background: #ffffff;
