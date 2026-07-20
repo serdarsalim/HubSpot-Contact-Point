@@ -824,6 +824,14 @@
         vertical-align: -1px;
       }
 
+      .cp-wa-inline {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 6px;
+        vertical-align: middle;
+      }
+
       .cp-phone-flag-tooltip {
         position: fixed;
         z-index: 2147483647;
@@ -1163,84 +1171,6 @@
     }
   }
 
-  function findActiveContactPhoneValueElement() {
-    const telAnchor = Array.from(document.querySelectorAll("a[href^='tel:']")).find((node) => isVisible(node) && PHONE_PATTERN.test(cleanText(node.textContent || node.getAttribute("href") || "")));
-    if (telAnchor) return telAnchor;
-
-    const labels = Array.from(document.querySelectorAll("label, dt, th, span, div, p, strong, h4, h5"));
-    for (const labelNode of labels) {
-      // Cheap text check first; isVisible() forces a style+layout reflow, so we
-      // only pay it for the handful of nodes that actually look like a phone label.
-      const labelText = cleanText(labelNode.textContent || "");
-      if (!labelText || labelText.length > 60 || !/\bphone(?: number)?\b/i.test(labelText)) continue;
-      if (!isVisible(labelNode)) continue;
-
-      const sibling = labelNode.nextElementSibling;
-      if (sibling instanceof Element && isVisible(sibling) && PHONE_PATTERN.test(cleanText(sibling.textContent || ""))) {
-        return sibling;
-      }
-
-      const row = labelNode.closest("li, tr, [role='row'], section, article, div");
-      if (!(row instanceof Element)) continue;
-
-      const candidates = Array.from(row.querySelectorAll("a[href^='tel:'], a, span, div, p"))
-        .filter((node) => {
-          if (!(node instanceof Element) || node === labelNode || node.contains(labelNode)) return false;
-          if (!isVisible(node)) return false;
-          if (node.classList.contains("cp-active-contact-whatsapp-btn")) return false;
-          const text = cleanText(node.textContent || "");
-          if (!text || !PHONE_PATTERN.test(text)) return false;
-          if (/\bphone(?: number)?\b/i.test(text)) return false;
-          return true;
-        })
-        .sort((a, b) => {
-          const aTel = a instanceof HTMLAnchorElement && String(a.getAttribute("href") || "").startsWith("tel:") ? 1 : 0;
-          const bTel = b instanceof HTMLAnchorElement && String(b.getAttribute("href") || "").startsWith("tel:") ? 1 : 0;
-          if (aTel !== bTel) return bTel - aTel;
-          return cleanText(a.textContent || "").length - cleanText(b.textContent || "").length;
-        });
-
-      if (candidates[0]) return candidates[0];
-    }
-
-    return null;
-  }
-
-  function decorateActiveContactPhoneField() {
-    if (inferObjectKindFromPath() !== "contact" || !getRecordIdFromPath()) return;
-
-    const phoneValueEl = findActiveContactPhoneValueElement();
-    if (!(phoneValueEl instanceof Element)) return;
-
-    const rawPhone = cleanPhoneCandidate(phoneValueEl.textContent || phoneValueEl.getAttribute("href") || "");
-    const waUrl = buildContactIndexWhatsappUrl(rawPhone);
-    if (!waUrl) return;
-
-    const existingButton = phoneValueEl.parentElement?.querySelector(".cp-active-contact-whatsapp-btn") || null;
-    if (existingButton instanceof HTMLButtonElement && existingButton.dataset.waUrl !== waUrl) {
-      existingButton.remove();
-    }
-
-    if (!phoneValueEl.parentElement?.querySelector(".cp-active-contact-whatsapp-btn")) {
-      const wrapper =
-        phoneValueEl.parentElement instanceof Element && phoneValueEl.parentElement.classList.contains("cp-active-contact-phone-action-wrap")
-          ? phoneValueEl.parentElement
-          : null;
-      const button = createActiveContactWhatsappButton(waUrl);
-
-      if (wrapper) {
-        wrapper.appendChild(button);
-      } else {
-        const nextWrapper = document.createElement("span");
-        nextWrapper.className = "cp-active-contact-phone-action-wrap";
-        phoneValueEl.parentNode?.insertBefore(nextWrapper, phoneValueEl);
-        nextWrapper.appendChild(phoneValueEl);
-        nextWrapper.appendChild(button);
-      }
-    }
-
-  }
-
   // On record pages HubSpot renders each phone property as a visible text
   // span plus a separate textless tel: icon button, so flags anchor on the
   // text: any leaf element whose entire content is an international number
@@ -1268,10 +1198,48 @@
     return flags;
   }
 
+  // WhatsApp buttons anchor on the same always-visible number text the flags
+  // use: HubSpot's tel: link lives in the property's hover cluster (next to
+  // Details/edit), so anything anchored there only shows on hover.
+  function findPhoneTextWaButtons(node, text) {
+    const buttons = [];
+    let current = node;
+    while (current && current !== document.body) {
+      const next = current.nextElementSibling;
+      if (next instanceof Element && next.classList.contains("cp-active-contact-whatsapp-btn")) {
+        buttons.push(next);
+      }
+      const parent = current.parentElement;
+      if (!parent || cleanText(parent.textContent || "") !== text) break;
+      current = parent;
+    }
+    return buttons;
+  }
+
+  function ensureInlinePhoneWaButton(node, text) {
+    const waUrl = buildContactIndexWhatsappUrl(text);
+    const existing = findPhoneTextWaButtons(node, text);
+    if (!waUrl) {
+      for (const button of existing) button.remove();
+      return;
+    }
+
+    let kept = null;
+    for (const button of existing) {
+      if (!kept && button.dataset.waUrl === waUrl) kept = button;
+      else button.remove();
+    }
+    if (kept) return;
+
+    const button = createActiveContactWhatsappButton(waUrl);
+    button.classList.add("cp-wa-inline");
+    node.parentNode?.insertBefore(button, node.nextSibling);
+  }
+
   function decorateActiveContactPhoneTextFlags() {
     if (inferObjectKindFromPath() !== "contact" || !getRecordIdFromPath()) return;
     // Toggle-off removal is handled centrally in applyInlineQuickActionsSettings.
-    if (!inlineQuickActionsState.phoneFlagsEnabled) return;
+    const flagsEnabled = inlineQuickActionsState.phoneFlagsEnabled;
 
     for (const node of document.querySelectorAll("span, a, p, div")) {
       if (node.childElementCount !== 0) continue;
@@ -1280,6 +1248,9 @@
       if (raw.length > 32 || raw.indexOf("+") === -1) continue;
       const text = cleanText(raw);
       if (!PHONE_TEXT_ONLY_PATTERN.test(text)) continue;
+
+      ensureInlinePhoneWaButton(node, text);
+      if (!flagsEnabled) continue;
 
       const country = resolvePhoneFlagCountry(text);
       const existing = findPhoneTextFlags(node, text);
@@ -2470,7 +2441,6 @@
     if (globalThis.__cpPerfDebug) {
       const start = performance.now();
       enhanceContactIndexInlineButtons();
-      decorateActiveContactPhoneField();
       decorateActiveContactPhoneTextFlags();
       enhanceSidebarDeclutter();
       ensureComposerTemplateSearch();
@@ -2479,7 +2449,6 @@
       return;
     }
     enhanceContactIndexInlineButtons();
-    decorateActiveContactPhoneField();
     decorateActiveContactPhoneTextFlags();
     enhanceSidebarDeclutter();
     ensureComposerTemplateSearch();
