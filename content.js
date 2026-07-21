@@ -5985,10 +5985,9 @@
   const SIGNATURE_TOGGLE_ID = "cp-signature-toggle";
   const SIGNATURE_TOGGLE_STYLE_ID = "cp-signature-toggle-styles";
 
-  // The detached signature node is kept so "Add signature" restores exactly
-  // what was removed, rather than a reconstruction of it.
-  const signatureToggleState = { removedNode: null, removedFromRoot: null };
-
+  // Remove only. Putting the signature back means appending a node HubSpot's
+  // ProseMirror has no record of, so the editor drops it on the next
+  // transaction; undo already covers the mistake case.
   function ensureSignatureToggleStyles() {
     if (document.getElementById(SIGNATURE_TOGGLE_STYLE_ID)) return;
     const style = document.createElement("style");
@@ -6016,28 +6015,8 @@
         background: #f2f6fa;
         border-color: #7c93ac;
       }
-
-      .cp-sig-toggle[data-cp-state='removed'] {
-        border-color: #b9d4c4;
-        color: #1a6b45;
-      }
-
-      .cp-sig-toggle[data-cp-state='removed']:hover {
-        background: #eff8f3;
-        border-color: #6aa98a;
-      }
     `;
     document.documentElement.appendChild(style);
-  }
-
-  function findEmailComposerBodyRoot(dialog) {
-    for (const bodyEditor of getBodyEditorCandidates(dialog)) {
-      const target = resolveEditorTarget(bodyEditor);
-      if (!target) continue;
-      const root = target.closest(".ProseMirror") || target;
-      if (root instanceof Element) return root;
-    }
-    return null;
   }
 
   function findAttachFileControl(dialog) {
@@ -6052,47 +6031,19 @@
     return null;
   }
 
-  function toggleEmailSignature() {
-    const dialog = findOpenEmailDialog();
-    if (!dialog) return;
-
+  function removeEmailSignature() {
     const found = findSignatureInEmailComposer();
-    if (found) {
-      signatureToggleState.removedNode = found.sig;
-      signatureToggleState.removedFromRoot = found.root;
-      found.sig.remove();
-      dispatchInputLikeEvents(found.root);
-      return;
-    }
-
-    const stashed = signatureToggleState.removedNode;
-    const root = signatureToggleState.removedFromRoot?.isConnected
-      ? signatureToggleState.removedFromRoot
-      : findEmailComposerBodyRoot(dialog);
-    if (!stashed || !root) return;
-
-    root.appendChild(stashed);
-    signatureToggleState.removedNode = null;
-    signatureToggleState.removedFromRoot = null;
-    dispatchInputLikeEvents(root);
+    if (!found) return;
+    found.sig.remove();
+    dispatchInputLikeEvents(found.root);
   }
 
   function syncSignatureToggleIfNeeded() {
     const dialog = findOpenEmailDialog();
     const existing = document.getElementById(SIGNATURE_TOGGLE_ID);
 
-    if (!dialog) {
-      existing?.remove();
-      // A closed composer invalidates the stash: re-adding into a dead root
-      // would silently do nothing.
-      signatureToggleState.removedNode = null;
-      signatureToggleState.removedFromRoot = null;
-      return;
-    }
-
-    const hasSignature = !!findSignatureInEmailComposer();
-    const canRestore = !!signatureToggleState.removedNode;
-    if (!hasSignature && !canRestore) {
+    // No composer, or nothing left to remove: the pill has no job.
+    if (!dialog || !findSignatureInEmailComposer()) {
       existing?.remove();
       return;
     }
@@ -6114,7 +6065,7 @@
       btn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        toggleEmailSignature();
+        removeEmailSignature();
         syncSignatureToggleIfNeeded();
       });
 
@@ -6127,11 +6078,9 @@
       anchorItem.parentElement?.insertBefore(btn, anchorItem.nextSibling);
     }
 
-    const label = hasSignature ? "Remove signature" : "Add signature";
-    if (btn.textContent !== label) btn.textContent = label;
-    btn.title = label;
-    btn.setAttribute("aria-label", label);
-    btn.dataset.cpState = hasSignature ? "present" : "removed";
+    if (btn.textContent !== "Remove signature") btn.textContent = "Remove signature";
+    btn.title = "Remove signature";
+    btn.setAttribute("aria-label", "Remove signature");
   }
 
   function startInlineQuickActionsWatcher() {
