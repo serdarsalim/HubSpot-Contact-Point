@@ -2171,8 +2171,7 @@
 
     // Email composer: below its tab bar. The tab list itself lives inside a
     // flex row, so climb to the first ancestor spanning (nearly) the dialog
-    // width to get an own full-width line. Note composer has no tab bar; the
-    // row goes at the top of the dialog.
+    // width to get an own full-width line.
     const tabRow = kindKey === "email" ? findComposerTabRow(dialog) : null;
     if (tabRow?.parentElement) {
       const dialogWidth = dialog.getBoundingClientRect().width || 0;
@@ -2183,12 +2182,19 @@
       }
       anchor.parentElement.insertBefore(row, anchor.nextSibling);
     } else {
-      dialog.insertBefore(row, dialog.firstChild);
+      // Note composer has no tab bar. Mount below the dialog header so it
+      // sits in the same place as the email row rather than above the title.
+      const header = Array.from(dialog.children).find(
+        (child) => child !== row && (child.tagName === "HEADER" || !!child.querySelector("[aria-label*='close' i]"))
+      );
+      dialog.insertBefore(row, header ? header.nextSibling : dialog.firstChild);
     }
 
     kindState.outsideClickHandler = (event) => {
       if (!(event.target instanceof Node) || !row.isConnected) return;
-      if (!row.contains(event.target)) closeComposerTemplateDropdown(kindKey);
+      // Only the field and its dropdown keep the list open, so clicking the
+      // bare stretch of the row (or the bolt) dismisses it too.
+      if (!inputWrap.contains(event.target)) closeComposerTemplateDropdown(kindKey);
     };
     document.addEventListener("mousedown", kindState.outsideClickHandler, true);
 
