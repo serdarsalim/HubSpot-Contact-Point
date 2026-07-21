@@ -1891,20 +1891,29 @@
       const prop = dot === -1 ? key : key.slice(dot + 1);
 
       if (scope === "contact") {
-        // With the record's real property set, every contact token resolves:
-        // present renders its value, absent is genuinely unset and renders
-        // blank — exactly what HubSpot's own insert does.
-        if (realProps) {
-          return escapeHtml(formatHubSpotPropertyValue(cleanText(realProps[prop] || "")));
-        }
-        // Sidebar-derived fallback: only hands off on a property the sidebar
-        // never showed, since there absent might still mean "has a value".
         const tokenKey = inlineTokenKey(prop);
+
+        // Sidebar first: it shows the option's label ("Hanım"), while the
+        // stored property holds the raw value ("Kadin"). HubSpot renders the
+        // label, so that is what a filled template needs.
+        const shown = cleanText(tokens[tokenKey] || "");
+        if (shown) return escapeHtml(shown);
+
+        // Otherwise the record's own properties, which cover fields the
+        // sidebar never displays. Present renders, absent is genuinely unset
+        // and renders blank — exactly what HubSpot's insert does.
+        if (realProps) {
+          if (Object.prototype.hasOwnProperty.call(realProps, prop)) {
+            return escapeHtml(formatHubSpotPropertyValue(cleanText(realProps[prop])));
+          }
+          return "";
+        }
+
         if (!Object.prototype.hasOwnProperty.call(tokens, tokenKey)) {
           unresolved = key;
           return match;
         }
-        return escapeHtml(cleanText(tokens[tokenKey] || ""));
+        return "";
       }
 
       if (scope === "sender" || scope === "owner") {
