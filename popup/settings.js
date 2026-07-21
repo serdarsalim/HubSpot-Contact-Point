@@ -540,6 +540,11 @@
         queueSettingsAutosave({ immediate: true });
       });
     }
+    if (dom.composerTemplateSearchEnabledInput) {
+      dom.composerTemplateSearchEnabledInput.addEventListener("change", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
     if (dom.openContactsInBackgroundInput) {
       dom.openContactsInBackgroundInput.addEventListener("change", () => {
         void chrome.storage.local.set({
@@ -921,6 +926,9 @@
       phoneFlagsEnabled: dom.phoneFlagsEnabledInput ? dom.phoneFlagsEnabledInput.checked : true,
       phoneFlagsExcludedIsos: getPhoneFlagsExcludedIsos(),
       sidebarDeclutterEnabled: dom.sidebarDeclutterEnabledInput ? dom.sidebarDeclutterEnabledInput.checked : true,
+      composerTemplateSearchEnabled: dom.composerTemplateSearchEnabledInput
+        ? dom.composerTemplateSearchEnabledInput.checked
+        : true,
       visibleColumns,
       columnWidths: App.normalizeColumnWidths(state.settings.columnWidths),
       columnOrder: App.normalizeColumnOrder(state.settings.columnOrder)
@@ -940,6 +948,9 @@
     }
     if (dom.sidebarDeclutterEnabledInput) {
       dom.sidebarDeclutterEnabledInput.checked = state.settings.sidebarDeclutterEnabled !== false;
+    }
+    if (dom.composerTemplateSearchEnabledInput) {
+      dom.composerTemplateSearchEnabledInput.checked = state.settings.composerTemplateSearchEnabled !== false;
     }
     syncPhoneFlagsExcludeFieldVisibility();
     renderPhoneFlagsExcludedChips();
@@ -2047,6 +2058,7 @@
     state.settings.phoneFlagsEnabled = state.settings.phoneFlagsEnabled !== false;
     state.settings.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(state.settings.phoneFlagsExcludedIsos);
     state.settings.sidebarDeclutterEnabled = state.settings.sidebarDeclutterEnabled !== false;
+    state.settings.composerTemplateSearchEnabled = state.settings.composerTemplateSearchEnabled !== false;
     state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
     state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud !== false;
     state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud !== false;
