@@ -1799,8 +1799,10 @@
         max-height: 47px;
         box-sizing: border-box;
         padding: 8px 16px;
-        background: #ffffff;
-        border-bottom: 1px solid #dfe3eb;
+        /* Contact Point's own blue, not HubSpot's chrome: the row has to read
+           as "this bar is ours" against a native HubSpot composer. */
+        background: #eef4fb;
+        border-bottom: 1px solid #d8e6f8;
       }
 
       .cp-cts-bolt {
@@ -1822,7 +1824,7 @@
         transform: translateY(-50%);
         width: 13px;
         height: 13px;
-        stroke: #7c98b6;
+        stroke: #9ab1cb;
         fill: none;
         stroke-width: 2;
         pointer-events: none;
@@ -1833,10 +1835,10 @@
         height: 30px;
         box-sizing: border-box;
         padding: 0 10px 0 29px;
-        border: 1px solid #cbd6e2;
+        border: 1px solid #d8e6f8;
         border-radius: 6px;
-        background: #f5f8fa;
-        color: #33475b;
+        background: #ffffff;
+        color: #1a2a3e;
         font-size: 13px;
         outline: none;
         transition: background-color 100ms ease, border-color 100ms ease;
@@ -1844,12 +1846,12 @@
 
       .cp-cts-input:focus {
         background: #ffffff;
-        border-color: rgba(0, 208, 228, 0.5);
-        box-shadow: 0 0 4px 1px rgba(0, 208, 228, 0.3);
+        border-color: #0b66c3;
+        box-shadow: 0 0 0 3px rgba(11, 102, 195, 0.16);
       }
 
       .cp-cts-input::placeholder {
-        color: #7c98b6;
+        color: #9ab1cb;
       }
 
       .cp-cts-dropdown {
