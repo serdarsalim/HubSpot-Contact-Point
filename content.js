@@ -1829,7 +1829,9 @@
   }
 
   function findEmailSenderName(dialog) {
-    const match = elementText(dialog).match(/From\s+([^(]{2,60})\(/);
+    // The From label and the name are sibling elements, so textContent joins
+    // them with no space between: "FromSerdar Domurcuk (email)".
+    const match = elementText(dialog).match(/From\s*([^()]{2,60})\(/);
     return match ? cleanText(match[1]) : "";
   }
 
