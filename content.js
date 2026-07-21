@@ -1790,6 +1790,9 @@
         position: relative;
         display: flex;
         align-items: center;
+        /* The input is centred in the row; the bolt is pulled out of flow so
+           it can't push the field off-centre. */
+        justify-content: center;
         gap: 8px;
         width: 100%;
         /* flex-basis 100% wraps to an own line in row parents, but grow must
@@ -1799,19 +1802,27 @@
         max-height: 47px;
         box-sizing: border-box;
         padding: 8px 16px;
-        background: #ffffff;
-        border-bottom: 1px solid #dfe3eb;
+        /* Deep enough to read as a toolbar rather than a pastel accent, and
+           desaturated so it stays sober next to the composer header. */
+        background: #dbe4ee;
+        border-bottom: 1px solid #b9c8d9;
       }
 
       .cp-cts-bolt {
-        flex: 0 0 auto;
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
         font-size: 13px;
         line-height: 1;
       }
 
       .cp-cts-input-wrap {
         position: relative;
-        flex: 1 1 auto;
+        /* Capped, not full width: the field's width should suggest how much
+           you type into it, and template names are short. Still shrinks on
+           narrow composers. */
+        flex: 0 1 440px;
         min-width: 0;
       }
 
@@ -1822,7 +1833,7 @@
         transform: translateY(-50%);
         width: 13px;
         height: 13px;
-        stroke: #7c98b6;
+        stroke: #7c93ac;
         fill: none;
         stroke-width: 2;
         pointer-events: none;
@@ -1833,10 +1844,10 @@
         height: 30px;
         box-sizing: border-box;
         padding: 0 10px 0 29px;
-        border: 1px solid #cbd6e2;
+        border: 1px solid #b9c8d9;
         border-radius: 6px;
-        background: #f5f8fa;
-        color: #33475b;
+        background: #ffffff;
+        color: #1a2a3e;
         font-size: 13px;
         outline: none;
         transition: background-color 100ms ease, border-color 100ms ease;
@@ -1844,19 +1855,21 @@
 
       .cp-cts-input:focus {
         background: #ffffff;
-        border-color: rgba(0, 208, 228, 0.5);
-        box-shadow: 0 0 4px 1px rgba(0, 208, 228, 0.3);
+        border-color: #0b66c3;
+        box-shadow: 0 0 0 3px rgba(11, 102, 195, 0.18);
       }
 
       .cp-cts-input::placeholder {
-        color: #7c98b6;
+        color: #7c93ac;
       }
 
       .cp-cts-dropdown {
+        /* Anchored to the input wrap, so it tracks the capped field width
+           instead of spanning the whole row. */
         position: absolute;
-        top: calc(100% - 4px);
-        left: 16px;
-        right: 16px;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
         z-index: 30;
         display: none;
         max-height: 280px;
@@ -2153,13 +2166,12 @@
     });
 
     row.appendChild(bolt);
+    inputWrap.appendChild(dropdown);
     row.appendChild(inputWrap);
-    row.appendChild(dropdown);
 
     // Email composer: below its tab bar. The tab list itself lives inside a
     // flex row, so climb to the first ancestor spanning (nearly) the dialog
-    // width to get an own full-width line. Note composer has no tab bar; the
-    // row goes at the top of the dialog.
+    // width to get an own full-width line.
     const tabRow = kindKey === "email" ? findComposerTabRow(dialog) : null;
     if (tabRow?.parentElement) {
       const dialogWidth = dialog.getBoundingClientRect().width || 0;
@@ -2170,12 +2182,19 @@
       }
       anchor.parentElement.insertBefore(row, anchor.nextSibling);
     } else {
-      dialog.insertBefore(row, dialog.firstChild);
+      // Note composer has no tab bar. Mount below the dialog header so it
+      // sits in the same place as the email row rather than above the title.
+      const header = Array.from(dialog.children).find(
+        (child) => child !== row && (child.tagName === "HEADER" || !!child.querySelector("[aria-label*='close' i]"))
+      );
+      dialog.insertBefore(row, header ? header.nextSibling : dialog.firstChild);
     }
 
     kindState.outsideClickHandler = (event) => {
       if (!(event.target instanceof Node) || !row.isConnected) return;
-      if (!row.contains(event.target)) closeComposerTemplateDropdown(kindKey);
+      // Only the field and its dropdown keep the list open, so clicking the
+      // bare stretch of the row (or the bolt) dismisses it too.
+      if (!inputWrap.contains(event.target)) closeComposerTemplateDropdown(kindKey);
     };
     document.addEventListener("mousedown", kindState.outsideClickHandler, true);
 
@@ -3735,10 +3754,20 @@
     element.dispatchEvent(new EventCtor("change", { bubbles: true }));
   }
 
+  function decodeHtmlEntities(value) {
+    const raw = String(value || "");
+    if (!raw.includes("&")) return raw;
+    // A textarea's content is RCDATA: entities decode, markup does not become
+    // elements. Safe for strings we can't prove are markup.
+    const holder = document.createElement("textarea");
+    holder.innerHTML = raw;
+    return holder.value;
+  }
+
   function htmlToPlainText(value) {
     const raw = String(value || "");
     if (!raw) return "";
-    if (!/<[a-z][\s\S]*>/i.test(raw)) return cleanText(raw);
+    if (!/<[a-z][\s\S]*>/i.test(raw)) return cleanText(decodeHtmlEntities(raw));
     const container = document.createElement("div");
     container.innerHTML = raw;
     return cleanText(container.textContent || "");
@@ -4051,8 +4080,9 @@
     }
   };
 
+  // Opt-in now that the widget is superseded: absent means off, not on.
   function normalizeInlineQuickActionsEnabled(value) {
-    return value !== false;
+    return value === true;
   }
 
   function normalizePhoneFlagsExcludedIsos(value) {
@@ -5033,30 +5063,6 @@
         color: #dacdf0 !important;
       }
 
-      .cp-sig-remove-btn {
-        position: fixed;
-        z-index: 2147483647;
-        width: 22px;
-        height: 22px;
-        background: #dc2626;
-        color: #fff;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 15px;
-        font-weight: 900;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-        padding: 0;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.28);
-        pointer-events: all;
-      }
-
-      .cp-sig-remove-btn:hover {
-        background: #b91c1c;
-      }
     `;
     document.documentElement.appendChild(styleEl);
   }
@@ -5237,6 +5243,10 @@
     const filledBodyHtml = applyInlineTemplateTokens(template?.body || "", tokens).trim();
     const noteBody = htmlToPlainText(filledBodyHtml) || filledBodyHtml;
     if (!noteBody) throw new Error("Selected note template is empty.");
+
+    // The task composer is checked first: findNoteEditor() also matches its
+    // fields, and would otherwise dump the whole body into the subject.
+    if (applyTemplateToOpenTaskComposer(template, filledBodyHtml, noteBody)) return;
 
     const existingEditor = findNoteEditor();
     if (existingEditor && getNoteComposerRoot(existingEditor)) {
@@ -5430,6 +5440,74 @@
     }
 
     return bestScore >= 16 ? best : null;
+  }
+
+  function scoreTaskBodyFieldCandidate(element, titleField) {
+    if (!(element instanceof Element) || !isVisible(element)) return -Infinity;
+    if (element === titleField) return -Infinity;
+    if (element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true") return -Infinity;
+
+    const hint = getElementHint(element);
+    const placeholder = cleanText(element.getAttribute?.("placeholder") || "").toLowerCase();
+    const text = `${hint} ${placeholder}`.trim();
+    let score = 0;
+
+    if (text.includes("task description")) score += 40;
+    if (text.includes("description")) score += 20;
+    if (text.includes("notes") || text.includes("note")) score += 16;
+    if (text.includes("body")) score += 10;
+    // The subject field and the date/time inputs are never the body.
+    if (text.includes("enter your task")) score -= 40;
+    if (text.includes("task title")) score -= 34;
+    if (text.includes("reminder") || text.includes("date") || text.includes("queue")) score -= 24;
+
+    if (element.getAttribute("contenteditable") === "true") score += 14;
+    if (element.closest("[data-selenium-test='rich-text-editor'], .ProseMirror")) score += 12;
+    if (String(element.tagName || "").toLowerCase() === "input") score -= 12;
+
+    const rect = element.getBoundingClientRect();
+    if (rect.height >= 60) score += 6;
+
+    return score;
+  }
+
+  function findTaskBodyField(root, titleField) {
+    if (!(root instanceof Element)) return null;
+    const candidates = Array.from(root.querySelectorAll("textarea, input, [contenteditable='true'], [role='textbox']"));
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (const candidate of candidates) {
+      const score = scoreTaskBodyFieldCandidate(candidate, titleField);
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    return bestScore >= 16 ? best : null;
+  }
+
+  // A note template applied while the task composer is open splits across the
+  // two fields: template name into the subject, body into the description.
+  // Notes have no title, so the note composer keeps taking body only.
+  function applyTemplateToOpenTaskComposer(template, filledBodyHtml, plainBody) {
+    const composerRoot = findTaskComposerRoot();
+    if (!(composerRoot instanceof Element)) return false;
+
+    const titleField = findTaskTitleField(composerRoot);
+    const bodyField = findTaskBodyField(composerRoot, titleField);
+    if (!titleField && !bodyField) return false;
+
+    const title = cleanText(template?.name || "");
+    if (titleField && title) setInputValue(titleField, title);
+
+    if (bodyField && (plainBody || filledBodyHtml)) {
+      clearEditorContent(bodyField);
+      setEditorContent(bodyField, plainBody, filledBodyHtml);
+    }
+
+    return true;
   }
 
   function focusTaskTitleField() {
@@ -5904,64 +5982,105 @@
     return null;
   }
 
-  function removeEmailSignatureFromComposer() {
+  const SIGNATURE_TOGGLE_ID = "cp-signature-toggle";
+  const SIGNATURE_TOGGLE_STYLE_ID = "cp-signature-toggle-styles";
+
+  // Remove only. Putting the signature back means appending a node HubSpot's
+  // ProseMirror has no record of, so the editor drops it on the next
+  // transaction; undo already covers the mistake case.
+  function ensureSignatureToggleStyles() {
+    if (document.getElementById(SIGNATURE_TOGGLE_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = SIGNATURE_TOGGLE_STYLE_ID;
+    style.textContent = `
+      .cp-sig-toggle {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        margin: 0 0 0 4px;
+        padding: 0 10px;
+        border: 1px solid #b9c8d9;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #33475b;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 100ms ease, border-color 100ms ease;
+      }
+
+      .cp-sig-toggle:hover {
+        background: #f2f6fa;
+        border-color: #7c93ac;
+      }
+    `;
+    document.documentElement.appendChild(style);
+  }
+
+  function findAttachFileControl(dialog) {
+    const controls = Array.from(dialog.querySelectorAll("button, [role='button']"));
+    for (const control of controls) {
+      if (!isVisible(control)) continue;
+      const hint = `${control.getAttribute("aria-label") || ""} ${control.getAttribute("data-test-id") || ""} ${
+        control.getAttribute("title") || ""
+      }`.toLowerCase();
+      if (hint.includes("attach") || hint.includes("select-file-dropdown")) return control;
+    }
+    return null;
+  }
+
+  function removeEmailSignature() {
     const found = findSignatureInEmailComposer();
-    if (!found) throw new Error("No signature found in the open email composer.");
+    if (!found) return;
     found.sig.remove();
     dispatchInputLikeEvents(found.root);
   }
 
-  let sigRemoveBtnScrollHandler = null;
+  function syncSignatureToggleIfNeeded() {
+    const dialog = findOpenEmailDialog();
+    const existing = document.getElementById(SIGNATURE_TOGGLE_ID);
 
-  function updateSigRemoveBtnPosition() {
-    const btn = document.querySelector(".cp-sig-remove-btn");
-    if (!btn) return;
-    const found = findSignatureInEmailComposer();
-    if (!found) {
-      btn.remove();
+    // No composer, or nothing left to remove: the pill has no job.
+    if (!dialog || !findSignatureInEmailComposer()) {
+      existing?.remove();
       return;
     }
-    const rect = found.sig.getBoundingClientRect();
-    const btnSize = 22;
-    btn.style.top = `${Math.max(4, rect.top + 4)}px`;
-    btn.style.left = `${Math.max(4, rect.right - btnSize - 4)}px`;
-  }
 
-  function injectSigRemoveButtonIfNeeded() {
-    const found = findSignatureInEmailComposer();
-    if (!found) {
-      document.querySelector(".cp-sig-remove-btn")?.remove();
-      if (sigRemoveBtnScrollHandler) {
-        document.removeEventListener("scroll", sigRemoveBtnScrollHandler, true);
-        sigRemoveBtnScrollHandler = null;
+    let btn = existing;
+    if (!btn || !dialog.contains(btn)) {
+      const anchor = findAttachFileControl(dialog);
+      if (!anchor) {
+        existing?.remove();
+        return;
       }
-      return;
+      ensureSignatureToggleStyles();
+      existing?.remove();
+
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = SIGNATURE_TOGGLE_ID;
+      btn.className = "cp-sig-toggle";
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeEmailSignature();
+        syncSignatureToggleIfNeeded();
+      });
+
+      // Climb out of any single-child wrappers so the pill lands beside the
+      // attach control as a toolbar item, not inside its button box.
+      let anchorItem = anchor;
+      while (anchorItem.parentElement && anchorItem.parentElement.children.length === 1 && anchorItem.parentElement !== dialog) {
+        anchorItem = anchorItem.parentElement;
+      }
+      anchorItem.parentElement?.insertBefore(btn, anchorItem.nextSibling);
     }
-    if (document.querySelector(".cp-sig-remove-btn")) {
-      updateSigRemoveBtnPosition();
-      return;
-    }
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "cp-sig-remove-btn";
+
+    if (btn.textContent !== "Remove signature") btn.textContent = "Remove signature";
     btn.title = "Remove signature";
     btn.setAttribute("aria-label", "Remove signature");
-    btn.innerHTML = "<b>\u00d7</b>";
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        removeEmailSignatureFromComposer();
-      } catch (_err) {
-        // Signature already gone; the interval will clean up the button.
-      }
-    });
-    document.body.appendChild(btn);
-    if (!sigRemoveBtnScrollHandler) {
-      sigRemoveBtnScrollHandler = updateSigRemoveBtnPosition;
-      document.addEventListener("scroll", sigRemoveBtnScrollHandler, true);
-    }
-    updateSigRemoveBtnPosition();
   }
 
   function startInlineQuickActionsWatcher() {
@@ -5975,7 +6094,7 @@
       INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
     );
     inlineQuickActionsState.sigWatcherTimerId = window.setInterval(
-      injectSigRemoveButtonIfNeeded,
+      syncSignatureToggleIfNeeded,
       INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
     );
     document.addEventListener("pointerdown", closeInlinePanelWhenClickingOutside, true);

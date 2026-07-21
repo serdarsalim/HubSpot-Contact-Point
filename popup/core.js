@@ -242,7 +242,7 @@
     messageTemplate: "",
     noteTemplate: "",
     rowFilterWord: "",
-    inlineQuickActionsEnabled: true,
+    inlineQuickActionsEnabled: false,
     phoneFlagsEnabled: true,
     phoneFlagsExcludedIsos: [],
     sidebarDeclutterEnabled: true,
