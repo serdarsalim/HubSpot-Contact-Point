@@ -46,6 +46,18 @@ API="https://www.googleapis.com"
 VERSION="$(python3 -c 'import json;print(json.load(open("manifest.json"))["version"])')"
 ZIP="$ROOT_DIR/contact-pointshareable.zip"
 
+# --- verify before packaging ------------------------------------------------
+# Automation removed the human who used to notice a broken build, so the
+# pipeline has to notice for itself. A syntax error must never reach users.
+echo "Checking sources..."
+for js in content.js background.js popup.js popup/*.js shared/*.js; do
+  [[ -f "$js" ]] || continue
+  node --check "$js" || { echo "Syntax error in $js — aborting release." >&2; exit 1; }
+done
+python3 -c 'import json,sys; json.load(open("manifest.json"))' \
+  || { echo "manifest.json is not valid JSON — aborting release." >&2; exit 1; }
+echo "Sources OK."
+
 # --- build the package ------------------------------------------------------
 echo "Building shareable package for version $VERSION..."
 ./build-shareable.sh >/dev/null
