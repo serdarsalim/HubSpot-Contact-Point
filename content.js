@@ -1851,23 +1851,33 @@
       const scope = dot === -1 ? "" : key.slice(0, dot);
       const prop = dot === -1 ? key : key.slice(dot + 1);
 
-      let value = "";
+      // A property we know about renders even when the record leaves it
+      // blank, which is what HubSpot does too. Only a token we cannot map at
+      // all forces the hand-off.
       if (scope === "contact") {
-        value = cleanText(tokens[inlineTokenKey(prop)] || "");
-      } else if (scope === "sender" || scope === "owner") {
-        const parts = senderName.split(" ").filter(Boolean);
-        if (prop === "firstname") value = parts[0] || "";
-        else if (prop === "lastname") value = parts.slice(1).join(" ");
-        else if (prop === "fullname" || prop === "name") value = senderName;
+        const tokenKey = inlineTokenKey(prop);
+        if (!Object.prototype.hasOwnProperty.call(tokens, tokenKey)) {
+          unresolved = key;
+          return match;
+        }
+        return escapeHtml(cleanText(tokens[tokenKey] || ""));
       }
 
-      // An empty value is treated as unresolvable: silently blanking a token
-      // is worse than handing the template to HubSpot.
-      if (!value) {
-        unresolved = key;
-        return match;
+      if (scope === "sender" || scope === "owner") {
+        // A blank sender reads as broken rather than merely empty, so this
+        // one still hands off when the From line could not be read.
+        if (!senderName) {
+          unresolved = key;
+          return match;
+        }
+        const parts = senderName.split(" ").filter(Boolean);
+        if (prop === "firstname") return escapeHtml(parts[0] || "");
+        if (prop === "lastname") return escapeHtml(parts.slice(1).join(" "));
+        if (prop === "fullname" || prop === "name") return escapeHtml(senderName);
       }
-      return escapeHtml(value);
+
+      unresolved = key;
+      return match;
     });
     return { html, unresolved };
   }
