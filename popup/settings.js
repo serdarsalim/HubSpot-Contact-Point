@@ -545,6 +545,11 @@
         queueSettingsAutosave({ immediate: true });
       });
     }
+    if (dom.hubspotTemplatesEnabledInput) {
+      dom.hubspotTemplatesEnabledInput.addEventListener("change", () => {
+        queueSettingsAutosave({ immediate: true });
+      });
+    }
     if (dom.openContactsInBackgroundInput) {
       dom.openContactsInBackgroundInput.addEventListener("change", () => {
         void chrome.storage.local.set({
@@ -929,6 +934,7 @@
       composerTemplateSearchEnabled: dom.composerTemplateSearchEnabledInput
         ? dom.composerTemplateSearchEnabledInput.checked
         : true,
+      hubspotTemplatesEnabled: dom.hubspotTemplatesEnabledInput ? dom.hubspotTemplatesEnabledInput.checked : true,
       visibleColumns,
       columnWidths: App.normalizeColumnWidths(state.settings.columnWidths),
       columnOrder: App.normalizeColumnOrder(state.settings.columnOrder)
@@ -951,6 +957,9 @@
     }
     if (dom.composerTemplateSearchEnabledInput) {
       dom.composerTemplateSearchEnabledInput.checked = state.settings.composerTemplateSearchEnabled !== false;
+    }
+    if (dom.hubspotTemplatesEnabledInput) {
+      dom.hubspotTemplatesEnabledInput.checked = state.settings.hubspotTemplatesEnabled !== false;
     }
     syncPhoneFlagsExcludeFieldVisibility();
     renderPhoneFlagsExcludedChips();
@@ -2059,6 +2068,7 @@
     state.settings.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(state.settings.phoneFlagsExcludedIsos);
     state.settings.sidebarDeclutterEnabled = state.settings.sidebarDeclutterEnabled !== false;
     state.settings.composerTemplateSearchEnabled = state.settings.composerTemplateSearchEnabled !== false;
+    state.settings.hubspotTemplatesEnabled = state.settings.hubspotTemplatesEnabled !== false;
     state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
     state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud !== false;
     state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud !== false;

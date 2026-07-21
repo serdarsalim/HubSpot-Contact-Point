@@ -1753,7 +1753,7 @@
   // script, so the session cookie plus the CSRF header is all it needs.
   // Unpublished API: every failure falls back to Contact Point templates only.
   const HUBSPOT_TEMPLATE_CACHE_MS = 5 * 60 * 1000;
-  const hubspotTemplateState = { items: [], fetchedAt: 0, inFlight: null, failed: false };
+  const hubspotTemplateState = { items: [], fetchedAt: 0, inFlight: null, failed: false, enabled: true };
 
   function readBrowserCookie(name) {
     for (const part of String(document.cookie || "").split("; ")) {
@@ -1796,6 +1796,7 @@
   }
 
   function refreshHubSpotTemplates(onLoaded) {
+    if (!hubspotTemplateState.enabled) return;
     if (hubspotTemplateState.inFlight) return;
     const fresh = Date.now() - hubspotTemplateState.fetchedAt < HUBSPOT_TEMPLATE_CACHE_MS;
     if (fresh && hubspotTemplateState.items.length) return;
@@ -2004,7 +2005,10 @@
         if (text.includes("enter your task") || text.includes("task type")) return null;
         return dialog;
       },
-      getTemplates: () => [...(inlineQuickActionsState.templates?.email || []), ...hubspotTemplateState.items],
+      getTemplates: () => [
+        ...(inlineQuickActionsState.templates?.email || []),
+        ...(hubspotTemplateState.enabled ? hubspotTemplateState.items : [])
+      ],
       apply: (template) =>
         String(template?.source || "").toLowerCase() === "hubspot"
           ? applyHubSpotTemplate(template)
@@ -4462,6 +4466,19 @@
           composerTemplateSearchState.enabled = nextEnabled;
           if (!nextEnabled) removeComposerTemplateSearch();
           scheduleContactEnhancers();
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(source, "hubspotTemplatesEnabled")) {
+        const nextEnabled = source.hubspotTemplatesEnabled !== false;
+        if (nextEnabled !== hubspotTemplateState.enabled) {
+          hubspotTemplateState.enabled = nextEnabled;
+          // Drop the cache on disable so re-enabling refetches rather than
+          // serving a list from before the toggle.
+          if (!nextEnabled) {
+            hubspotTemplateState.items = [];
+            hubspotTemplateState.fetchedAt = 0;
+          }
         }
       }
     }
