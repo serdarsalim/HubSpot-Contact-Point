@@ -1799,10 +1799,11 @@
         max-height: 47px;
         box-sizing: border-box;
         padding: 8px 16px;
-        /* Contact Point's own blue, not HubSpot's chrome: the row has to read
-           as "this bar is ours" against a native HubSpot composer. */
-        background: #eef4fb;
-        border-bottom: 1px solid #d8e6f8;
+        /* Purple is the one hue absent from HubSpot's palette, so the row can
+           never be mistaken for native chrome. Keep it saturated enough to
+           read as deliberate against the slate-blue composer header. */
+        background: #f4f0fd;
+        border-bottom: 1px solid #e0d6f7;
       }
 
       .cp-cts-bolt {
@@ -1824,7 +1825,7 @@
         transform: translateY(-50%);
         width: 13px;
         height: 13px;
-        stroke: #9ab1cb;
+        stroke: #a397c4;
         fill: none;
         stroke-width: 2;
         pointer-events: none;
@@ -1835,7 +1836,7 @@
         height: 30px;
         box-sizing: border-box;
         padding: 0 10px 0 29px;
-        border: 1px solid #d8e6f8;
+        border: 1px solid #e0d6f7;
         border-radius: 6px;
         background: #ffffff;
         color: #1a2a3e;
@@ -1846,12 +1847,12 @@
 
       .cp-cts-input:focus {
         background: #ffffff;
-        border-color: #0b66c3;
-        box-shadow: 0 0 0 3px rgba(11, 102, 195, 0.16);
+        border-color: #6d4fd6;
+        box-shadow: 0 0 0 3px rgba(109, 79, 214, 0.16);
       }
 
       .cp-cts-input::placeholder {
-        color: #9ab1cb;
+        color: #a397c4;
       }
 
       .cp-cts-dropdown {
