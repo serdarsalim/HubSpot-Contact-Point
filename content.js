@@ -1833,11 +1833,47 @@
     return match ? cleanText(match[1]) : "";
   }
 
+  // The record's full property set, straight from HubSpot — templates token
+  // on internal property names (contact.kurs_ba_lang_tarihi), which the
+  // sidebar labels can't recover. A property absent here is genuinely unset,
+  // so rendering it blank matches what HubSpot's own insert produces.
+  async function fetchHubSpotContactProperties(recordId) {
+    const portalId = getHubSpotPortalId();
+    const csrf = readBrowserCookie("hubspotapi-csrf");
+    if (!portalId || !csrf || !recordId) return null;
+
+    const res = await fetch(
+      `/api/inbounddb-objects/v1/crm-objects/0-1/${encodeURIComponent(recordId)}?portalId=${encodeURIComponent(
+        portalId
+      )}&allPropertiesFetchMode=latest_version`,
+      { credentials: "include", headers: { "X-HubSpot-CSRF-hubspotapi": csrf } }
+    );
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const map = {};
+    for (const [name, prop] of Object.entries(data?.properties || {})) {
+      const value = prop?.versions?.[0]?.value;
+      if (value !== undefined && value !== null) map[String(name).toLowerCase()] = String(value);
+    }
+    return map;
+  }
+
+  function formatHubSpotPropertyValue(value) {
+    // Date/datetime properties arrive as epoch milliseconds; anything else
+    // passes through untouched.
+    if (/^\d{13}$/.test(value)) {
+      const date = new Date(Number(value));
+      if (!Number.isNaN(date.getTime())) return date.toLocaleDateString("tr-TR");
+    }
+    return value;
+  }
+
   // HubSpot templates use {{ contact.x }} and {{ sender.x }} tokens, which we
   // can fill from the record. Anything else — custom.* tracked document links,
   // {{#if}} conditionals — only HubSpot's own renderer can produce, so those
   // templates hand off to its picker rather than ship a broken link.
-  function resolveHubSpotTemplateHtml(rawHtml, tokens, senderName) {
+  function resolveHubSpotTemplateHtml(rawHtml, tokens, senderName, realProps) {
     let unresolved = "";
     const html = String(rawHtml || "").replace(/\{\{([^{}]*)\}\}/g, (match, inner) => {
       if (unresolved) return match;
@@ -1851,10 +1887,15 @@
       const scope = dot === -1 ? "" : key.slice(0, dot);
       const prop = dot === -1 ? key : key.slice(dot + 1);
 
-      // A property we know about renders even when the record leaves it
-      // blank, which is what HubSpot does too. Only a token we cannot map at
-      // all forces the hand-off.
       if (scope === "contact") {
+        // With the record's real property set, every contact token resolves:
+        // present renders its value, absent is genuinely unset and renders
+        // blank — exactly what HubSpot's own insert does.
+        if (realProps) {
+          return escapeHtml(formatHubSpotPropertyValue(cleanText(realProps[prop] || "")));
+        }
+        // Sidebar-derived fallback: only hands off on a property the sidebar
+        // never showed, since there absent might still mean "has a value".
         const tokenKey = inlineTokenKey(prop);
         if (!Object.prototype.hasOwnProperty.call(tokens, tokenKey)) {
           unresolved = key;
@@ -1911,10 +1952,12 @@
 
     const detail = await fetchHubSpotTemplateDetail(template?.contentId).catch(() => null);
     if (detail?.body) {
-      const tokens = buildInlineTemplateTokens(getInlineContactContextOrThrow());
+      const context = getInlineContactContextOrThrow();
+      const tokens = buildInlineTemplateTokens(context);
+      const realProps = await fetchHubSpotContactProperties(context.recordId).catch(() => null);
       const senderName = findEmailSenderName(dialog);
-      const body = resolveHubSpotTemplateHtml(detail.body, tokens, senderName);
-      const subject = resolveHubSpotTemplateHtml(detail.subject || "", tokens, senderName);
+      const body = resolveHubSpotTemplateHtml(detail.body, tokens, senderName, realProps);
+      const subject = resolveHubSpotTemplateHtml(detail.subject || "", tokens, senderName, realProps);
 
       if (!body.unresolved && !subject.unresolved) {
         await applyEmailTemplateOnPage(
