@@ -1748,6 +1748,255 @@
   // Per-kind wiring: which dialog hosts the row, which templates it offers,
   // and how a pick lands. The apply functions fill the open editor without
   // submitting anything.
+  // HubSpot's own template library, read through the same internal search the
+  // composer's "Select template" modal uses. Same-origin from the content
+  // script, so the session cookie plus the CSRF header is all it needs.
+  // Unpublished API: every failure falls back to Contact Point templates only.
+  const HUBSPOT_TEMPLATE_CACHE_MS = 5 * 60 * 1000;
+  const hubspotTemplateState = { items: [], fetchedAt: 0, inFlight: null, failed: false, enabled: true };
+
+  function readBrowserCookie(name) {
+    for (const part of String(document.cookie || "").split("; ")) {
+      const idx = part.indexOf("=");
+      if (idx > 0 && part.slice(0, idx) === name) return part.slice(idx + 1);
+    }
+    return "";
+  }
+
+  function getHubSpotPortalId() {
+    const match = String(location.pathname || "").match(/\/contacts\/(\d+)\//);
+    return match ? match[1] : "";
+  }
+
+  async function fetchHubSpotTemplates() {
+    const portalId = getHubSpotPortalId();
+    const csrf = readBrowserCookie("hubspotapi-csrf");
+    if (!portalId || !csrf) return [];
+
+    const res = await fetch(`/api/salescontentsearch/v2/search?portalId=${encodeURIComponent(portalId)}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-HubSpot-CSRF-hubspotapi": csrf },
+      // The whole library comes back well under one page, so this is a single
+      // request and all filtering happens locally.
+      body: JSON.stringify({ query: "", offset: 0, limit: 500 })
+    });
+    if (!res.ok) throw new Error(`HubSpot template search failed (${res.status})`);
+
+    const data = await res.json();
+    return (data?.results || [])
+      .filter((row) => String(row?.contentType || "") === "TEMPLATE")
+      .map((row) => ({
+        id: `hubspot-${row.contentId}`,
+        contentId: row.contentId,
+        name: cleanText(row.name || ""),
+        source: "hubspot"
+      }))
+      .filter((template) => template.name);
+  }
+
+  function refreshHubSpotTemplates(onLoaded) {
+    if (!hubspotTemplateState.enabled) return;
+    if (hubspotTemplateState.inFlight) return;
+    const fresh = Date.now() - hubspotTemplateState.fetchedAt < HUBSPOT_TEMPLATE_CACHE_MS;
+    if (fresh && hubspotTemplateState.items.length) return;
+
+    hubspotTemplateState.inFlight = fetchHubSpotTemplates()
+      .then((items) => {
+        hubspotTemplateState.items = items;
+        hubspotTemplateState.failed = false;
+      })
+      .catch(() => {
+        hubspotTemplateState.failed = true;
+      })
+      .finally(() => {
+        hubspotTemplateState.fetchedAt = Date.now();
+        hubspotTemplateState.inFlight = null;
+        onLoaded?.();
+      });
+  }
+
+  async function fetchHubSpotTemplateDetail(contentId) {
+    const portalId = getHubSpotPortalId();
+    const csrf = readBrowserCookie("hubspotapi-csrf");
+    if (!portalId || !csrf || !contentId) return null;
+
+    const res = await fetch(
+      `/api/sales-templates/v1/templates/${encodeURIComponent(contentId)}?portalId=${encodeURIComponent(portalId)}`,
+      { credentials: "include", headers: { "X-HubSpot-CSRF-hubspotapi": csrf } }
+    );
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  function findEmailSenderName(dialog) {
+    // The From label and the name are sibling elements, so textContent joins
+    // them with no space between: "FromSerdar Domurcuk (email)".
+    const match = elementText(dialog).match(/From\s*([^()]{2,60})\(/);
+    return match ? cleanText(match[1]) : "";
+  }
+
+  // The record's full property set, straight from HubSpot — templates token
+  // on internal property names (contact.kurs_ba_lang_tarihi), which the
+  // sidebar labels can't recover. A property absent here is genuinely unset,
+  // so rendering it blank matches what HubSpot's own insert produces.
+  async function fetchHubSpotContactProperties(recordId) {
+    const portalId = getHubSpotPortalId();
+    const csrf = readBrowserCookie("hubspotapi-csrf");
+    if (!portalId || !csrf || !recordId) return null;
+
+    const res = await fetch(
+      `/api/inbounddb-objects/v1/crm-objects/0-1/${encodeURIComponent(recordId)}?portalId=${encodeURIComponent(
+        portalId
+      )}&allPropertiesFetchMode=latest_version`,
+      { credentials: "include", headers: { "X-HubSpot-CSRF-hubspotapi": csrf } }
+    );
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const map = {};
+    for (const [name, prop] of Object.entries(data?.properties || {})) {
+      const value = prop?.versions?.[0]?.value;
+      if (value !== undefined && value !== null) map[String(name).toLowerCase()] = String(value);
+    }
+    return map;
+  }
+
+  function formatHubSpotPropertyValue(value) {
+    // Date/datetime properties arrive as epoch milliseconds; anything else
+    // passes through untouched.
+    if (/^\d{13}$/.test(value)) {
+      const date = new Date(Number(value));
+      if (!Number.isNaN(date.getTime())) return date.toLocaleDateString("tr-TR");
+    }
+    return value;
+  }
+
+  // HubSpot templates use {{ contact.x }} and {{ sender.x }} tokens, which we
+  // can fill from the record. Anything else — custom.* tracked document links,
+  // {{#if}} conditionals — only HubSpot's own renderer can produce, so those
+  // templates hand off to its picker rather than ship a broken link.
+  function resolveHubSpotTemplateHtml(rawHtml, tokens, senderName, realProps) {
+    let unresolved = "";
+    const html = String(rawHtml || "").replace(/\{\{([^{}]*)\}\}/g, (match, inner) => {
+      if (unresolved) return match;
+      const key = cleanText(inner).toLowerCase();
+      if (!/^[a-z0-9_.]+$/.test(key)) {
+        unresolved = key || "conditional";
+        return match;
+      }
+
+      const dot = key.indexOf(".");
+      const scope = dot === -1 ? "" : key.slice(0, dot);
+      const prop = dot === -1 ? key : key.slice(dot + 1);
+
+      if (scope === "contact") {
+        const tokenKey = inlineTokenKey(prop);
+
+        // Sidebar first: it shows the option's label ("Hanım"), while the
+        // stored property holds the raw value ("Kadin"). HubSpot renders the
+        // label, so that is what a filled template needs.
+        const shown = cleanText(tokens[tokenKey] || "");
+        if (shown) return escapeHtml(shown);
+
+        // Otherwise the record's own properties, which cover fields the
+        // sidebar never displays. Present renders, absent is genuinely unset
+        // and renders blank — exactly what HubSpot's insert does.
+        if (realProps) {
+          if (Object.prototype.hasOwnProperty.call(realProps, prop)) {
+            return escapeHtml(formatHubSpotPropertyValue(cleanText(realProps[prop])));
+          }
+          return "";
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(tokens, tokenKey)) {
+          unresolved = key;
+          return match;
+        }
+        return "";
+      }
+
+      if (scope === "sender" || scope === "owner") {
+        // A blank sender reads as broken rather than merely empty, so this
+        // one still hands off when the From line could not be read.
+        if (!senderName) {
+          unresolved = key;
+          return match;
+        }
+        const parts = senderName.split(" ").filter(Boolean);
+        if (prop === "firstname") return escapeHtml(parts[0] || "");
+        if (prop === "lastname") return escapeHtml(parts.slice(1).join(" "));
+        if (prop === "fullname" || prop === "name") return escapeHtml(senderName);
+      }
+
+      unresolved = key;
+      return match;
+    });
+    return { html, unresolved };
+  }
+
+  async function openHubSpotTemplatePicker(template) {
+    const dialog = findOpenEmailDialog();
+    if (!dialog) throw new Error("Open the email composer first.");
+
+    const tab = Array.from(dialog.querySelectorAll("a, button, [role='tab'], [role='link']")).find(
+      (el) => isVisible(el) && cleanText(el.textContent || "").toLowerCase() === "templates"
+    );
+    if (!tab) throw new Error("Could not find HubSpot's Templates button.");
+    tab.click();
+
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      await sleep(150);
+      const input = Array.from(document.querySelectorAll("input")).find(
+        (el) => isVisible(el) && /search templates/i.test(el.getAttribute("placeholder") || "")
+      );
+      if (input) {
+        setInputValue(input, template.name);
+        return;
+      }
+    }
+    throw new Error("HubSpot's template picker did not open.");
+  }
+
+  async function applyHubSpotTemplate(template) {
+    const dialog = findOpenEmailDialog();
+    if (!dialog) throw new Error("Open the email composer first.");
+
+    const detail = await fetchHubSpotTemplateDetail(template?.contentId).catch(() => null);
+    if (detail?.body) {
+      const context = getInlineContactContextOrThrow();
+      const tokens = buildInlineTemplateTokens(context);
+      const realProps = await fetchHubSpotContactProperties(context.recordId).catch(() => null);
+      const senderName = findEmailSenderName(dialog);
+      const body = resolveHubSpotTemplateHtml(detail.body, tokens, senderName, realProps);
+      const subject = resolveHubSpotTemplateHtml(detail.subject || "", tokens, senderName, realProps);
+
+      if (!body.unresolved && !subject.unresolved) {
+        await applyEmailTemplateOnPage(
+          htmlToPlainText(subject.html),
+          htmlToPlainText(body.html),
+          body.html
+        );
+        return null;
+      }
+
+      // Reported rather than opening the picker straight away: HubSpot's
+      // modal covers the composer, so a surprise modal reads as a bug.
+      return { needsHubSpotPicker: true, reason: describeUnresolvedToken(body.unresolved || subject.unresolved) };
+    }
+
+    return { needsHubSpotPicker: true, reason: "its content could not be read" };
+  }
+
+  function describeUnresolvedToken(token) {
+    const key = String(token || "").toLowerCase();
+    if (key.startsWith("custom.documentlink")) return "it contains a tracked document link";
+    if (key.startsWith("custom.")) return "it uses a HubSpot-only field";
+    if (/^(#|\/|if|else|end)/.test(key)) return "it uses conditional logic";
+    if (key.startsWith("sender.") || key.startsWith("owner.")) return "the sender could not be read";
+    return `the ${key} field is not on this record`;
+  }
+
   const COMPOSER_SEARCH_KINDS = {
     email: {
       rowId: COMPOSER_TEMPLATE_SEARCH_ROW_ID,
@@ -1765,8 +2014,14 @@
         if (text.includes("enter your task") || text.includes("task type")) return null;
         return dialog;
       },
-      getTemplates: () => inlineQuickActionsState.templates?.email || [],
-      apply: (template) => applyInlineEmailTemplate(template)
+      getTemplates: () => [
+        ...(inlineQuickActionsState.templates?.email || []),
+        ...(hubspotTemplateState.enabled ? hubspotTemplateState.items : [])
+      ],
+      apply: (template) =>
+        String(template?.source || "").toLowerCase() === "hubspot"
+          ? applyHubSpotTemplate(template)
+          : applyInlineEmailTemplate(template)
     },
     note: {
       rowId: COMPOSER_NOTE_SEARCH_ROW_ID,
@@ -1790,9 +2045,6 @@
         position: relative;
         display: flex;
         align-items: center;
-        /* The input is centred in the row; the bolt is pulled out of flow so
-           it can't push the field off-centre. */
-        justify-content: center;
         gap: 8px;
         width: 100%;
         /* flex-basis 100% wraps to an own line in row parents, but grow must
@@ -1809,20 +2061,14 @@
       }
 
       .cp-cts-bolt {
-        position: absolute;
-        left: 16px;
-        top: 50%;
-        transform: translateY(-50%);
+        flex: 0 0 auto;
         font-size: 13px;
         line-height: 1;
       }
 
       .cp-cts-input-wrap {
         position: relative;
-        /* Capped, not full width: the field's width should suggest how much
-           you type into it, and template names are short. Still shrinks on
-           narrow composers. */
-        flex: 0 1 440px;
+        flex: 1 1 auto;
         min-width: 0;
       }
 
@@ -1885,6 +2131,31 @@
         display: block;
       }
 
+      .cp-cts-badge {
+        flex: 0 0 auto;
+        padding: 0 5px;
+        border-radius: 3px;
+        border: 1px solid transparent;
+        font-size: 8.5px;
+        font-weight: 600;
+        line-height: 14px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .cp-cts-badge-cp {
+        background: #eef4fb;
+        border-color: #d8e6f8;
+        color: #0b66c3;
+      }
+
+      .cp-cts-badge-hs {
+        background: #fff1ec;
+        border-color: #ffd6c9;
+        color: #c2451c;
+      }
+
       .cp-cts-section {
         padding: 6px 8px 2px;
         font-size: 10.5px;
@@ -1945,6 +2216,33 @@
         padding: 10px;
         font-size: 12.5px;
         color: #7c98b6;
+      }
+
+      .cp-cts-notice {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        font-size: 12.5px;
+        color: #33475b;
+      }
+
+      .cp-cts-notice-btn {
+        flex: 0 0 auto;
+        padding: 4px 10px;
+        border: 1px solid #b9c8d9;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #0b66c3;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .cp-cts-notice-btn:hover {
+        background: #eef4fb;
+        border-color: #0b66c3;
       }
 
       /* WhatsApp template popover, anchored to the inline phone button. */
@@ -2031,21 +2329,34 @@
       kindState.activeIndex = 0;
     }
 
-    const cloud = visible.filter((template) => String(template?.source || "").toLowerCase() === "cloud");
-    const personal = visible.filter((template) => String(template?.source || "").toLowerCase() !== "cloud");
+    const sourceOf = (template) => String(template?.source || "").toLowerCase();
+    const cloud = visible.filter((template) => sourceOf(template) === "cloud");
+    const hubspot = visible.filter((template) => sourceOf(template) === "hubspot");
+    const personal = visible.filter((template) => !["cloud", "hubspot"].includes(sourceOf(template)));
 
     const renderItem = (template) => {
       const index = kindState.visibleTemplateIds.indexOf(String(template.id));
       const isUsed = hasInlineTemplateBeenUsed(kindKey, template.id);
       const isActive = index === kindState.activeIndex;
+      const isHubSpot = sourceOf(template) === "hubspot";
+      const badge = isHubSpot
+        ? "<span class='cp-cts-badge cp-cts-badge-hs'>HubSpot</span>"
+        : "<span class='cp-cts-badge cp-cts-badge-cp'>Contact Point</span>";
       return (
         `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-cts-template-id='${escapeHtml(
           String(template.id)
         )}' data-cts-index='${index}'>` +
         `<span class='cp-cts-item-label'>${escapeHtml(template.name || "Untitled")}</span>` +
         "<span class='cp-cts-item-meta'>" +
-        `${String(template?.source || "").toLowerCase() === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
-        `<span class='cp-cts-check ${isUsed ? "is-used" : ""}' aria-hidden='true' title='${isUsed ? "Already sent to this contact" : ""}'>✓</span>` +
+        badge +
+        `${sourceOf(template) === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
+        `${
+          isHubSpot
+            ? ""
+            : `<span class='cp-cts-check ${isUsed ? "is-used" : ""}' aria-hidden='true' title='${
+                isUsed ? "Already sent to this contact" : ""
+              }'>✓</span>`
+        }` +
         "</span>" +
         "</button>"
       );
@@ -2053,7 +2364,8 @@
 
     dropdown.innerHTML =
       (cloud.length ? "<div class='cp-cts-section'>Cloud</div>" + cloud.map(renderItem).join("") : "") +
-      (personal.length ? "<div class='cp-cts-section'>Personal</div>" + personal.map(renderItem).join("") : "");
+      (personal.length ? "<div class='cp-cts-section'>Personal</div>" + personal.map(renderItem).join("") : "") +
+      (hubspot.length ? "<div class='cp-cts-section'>HubSpot</div>" + hubspot.map(renderItem).join("") : "");
   }
 
   function closeComposerTemplateDropdown(kindKey) {
@@ -2074,7 +2386,22 @@
     kindState.busy = true;
     if (input instanceof HTMLInputElement) input.placeholder = "Applying...";
     try {
-      await COMPOSER_SEARCH_KINDS[kindKey].apply(template);
+      const result = await COMPOSER_SEARCH_KINDS[kindKey].apply(template);
+
+      if (result?.needsHubSpotPicker) {
+        const dropdown = row?.querySelector(".cp-cts-dropdown");
+        if (dropdown) {
+          dropdown.innerHTML =
+            "<div class='cp-cts-notice'>" +
+            `<span>Can't fill this one here because ${escapeHtml(cleanText(result.reason || ""))}.</span>` +
+            `<button type='button' class='cp-cts-notice-btn' data-cts-open-picker='${escapeHtml(
+              String(template.id)
+            )}'>Open in HubSpot</button>` +
+            "</div>";
+        }
+        return;
+      }
+
       markInlineTemplateUsed(kindKey, template.id);
       void trackInlineCloudTemplateUse(template);
       kindState.query = "";
@@ -2143,6 +2470,11 @@
     input.setAttribute("aria-label", COMPOSER_SEARCH_KINDS[kindKey].placeholder);
     input.addEventListener("focus", () => {
       kindState.open = true;
+      if (kindKey === "email") {
+        refreshHubSpotTemplates(() => {
+          if (row.isConnected && kindState.open) renderComposerTemplateDropdown(kindKey);
+        });
+      }
       renderComposerTemplateDropdown(kindKey);
     });
     input.addEventListener("input", () => {
@@ -2159,7 +2491,19 @@
     // mousedown beats the input's blur, so a click can't close the dropdown
     // before the selection lands.
     dropdown.addEventListener("mousedown", (event) => {
-      const item = event.target instanceof Element ? event.target.closest("[data-cts-template-id]") : null;
+      const target = event.target instanceof Element ? event.target : null;
+
+      const picker = target?.closest("[data-cts-open-picker]");
+      if (picker) {
+        event.preventDefault();
+        const id = picker.getAttribute("data-cts-open-picker");
+        const template = COMPOSER_SEARCH_KINDS[kindKey].getTemplates().find((item) => String(item?.id || "") === String(id));
+        if (template) void openHubSpotTemplatePicker(template).catch(() => {});
+        closeComposerTemplateDropdown(kindKey);
+        return;
+      }
+
+      const item = target?.closest("[data-cts-template-id]");
       if (!item) return;
       event.preventDefault();
       void handleComposerTemplateSelection(kindKey, item.getAttribute("data-cts-template-id"));
@@ -4131,6 +4475,19 @@
           composerTemplateSearchState.enabled = nextEnabled;
           if (!nextEnabled) removeComposerTemplateSearch();
           scheduleContactEnhancers();
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(source, "hubspotTemplatesEnabled")) {
+        const nextEnabled = source.hubspotTemplatesEnabled !== false;
+        if (nextEnabled !== hubspotTemplateState.enabled) {
+          hubspotTemplateState.enabled = nextEnabled;
+          // Drop the cache on disable so re-enabling refetches rather than
+          // serving a list from before the toggle.
+          if (!nextEnabled) {
+            hubspotTemplateState.items = [];
+            hubspotTemplateState.fetchedAt = 0;
+          }
         }
       }
     }
