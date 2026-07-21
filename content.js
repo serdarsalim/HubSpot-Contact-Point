@@ -1790,6 +1790,9 @@
         position: relative;
         display: flex;
         align-items: center;
+        /* The input is centred in the row; the bolt is pulled out of flow so
+           it can't push the field off-centre. */
+        justify-content: center;
         gap: 8px;
         width: 100%;
         /* flex-basis 100% wraps to an own line in row parents, but grow must
@@ -1799,15 +1802,17 @@
         max-height: 47px;
         box-sizing: border-box;
         padding: 8px 16px;
-        /* Purple is the one hue absent from HubSpot's palette, so the row can
-           never be mistaken for native chrome. Keep it saturated enough to
-           read as deliberate against the slate-blue composer header. */
-        background: #e8dffa;
-        border-bottom: 1px solid #d3c4f2;
+        /* Deep enough to read as a toolbar rather than a pastel accent, and
+           desaturated so it stays sober next to the composer header. */
+        background: #dbe4ee;
+        border-bottom: 1px solid #b9c8d9;
       }
 
       .cp-cts-bolt {
-        flex: 0 0 auto;
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
         font-size: 13px;
         line-height: 1;
       }
@@ -1828,7 +1833,7 @@
         transform: translateY(-50%);
         width: 13px;
         height: 13px;
-        stroke: #a397c4;
+        stroke: #7c93ac;
         fill: none;
         stroke-width: 2;
         pointer-events: none;
@@ -1839,7 +1844,7 @@
         height: 30px;
         box-sizing: border-box;
         padding: 0 10px 0 29px;
-        border: 1px solid #d3c4f2;
+        border: 1px solid #b9c8d9;
         border-radius: 6px;
         background: #ffffff;
         color: #1a2a3e;
@@ -1850,12 +1855,12 @@
 
       .cp-cts-input:focus {
         background: #ffffff;
-        border-color: #6d4fd6;
-        box-shadow: 0 0 0 3px rgba(109, 79, 214, 0.16);
+        border-color: #0b66c3;
+        box-shadow: 0 0 0 3px rgba(11, 102, 195, 0.18);
       }
 
       .cp-cts-input::placeholder {
-        color: #a397c4;
+        color: #7c93ac;
       }
 
       .cp-cts-dropdown {
