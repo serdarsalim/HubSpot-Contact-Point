@@ -1748,6 +1748,99 @@
   // Per-kind wiring: which dialog hosts the row, which templates it offers,
   // and how a pick lands. The apply functions fill the open editor without
   // submitting anything.
+  // HubSpot's own template library, read through the same internal search the
+  // composer's "Select template" modal uses. Same-origin from the content
+  // script, so the session cookie plus the CSRF header is all it needs.
+  // Unpublished API: every failure falls back to Contact Point templates only.
+  const HUBSPOT_TEMPLATE_CACHE_MS = 5 * 60 * 1000;
+  const hubspotTemplateState = { items: [], fetchedAt: 0, inFlight: null, failed: false };
+
+  function readBrowserCookie(name) {
+    for (const part of String(document.cookie || "").split("; ")) {
+      const idx = part.indexOf("=");
+      if (idx > 0 && part.slice(0, idx) === name) return part.slice(idx + 1);
+    }
+    return "";
+  }
+
+  function getHubSpotPortalId() {
+    const match = String(location.pathname || "").match(/\/contacts\/(\d+)\//);
+    return match ? match[1] : "";
+  }
+
+  async function fetchHubSpotTemplates() {
+    const portalId = getHubSpotPortalId();
+    const csrf = readBrowserCookie("hubspotapi-csrf");
+    if (!portalId || !csrf) return [];
+
+    const res = await fetch(`/api/salescontentsearch/v2/search?portalId=${encodeURIComponent(portalId)}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-HubSpot-CSRF-hubspotapi": csrf },
+      // The whole library comes back well under one page, so this is a single
+      // request and all filtering happens locally.
+      body: JSON.stringify({ query: "", offset: 0, limit: 500 })
+    });
+    if (!res.ok) throw new Error(`HubSpot template search failed (${res.status})`);
+
+    const data = await res.json();
+    return (data?.results || [])
+      .filter((row) => String(row?.contentType || "") === "TEMPLATE")
+      .map((row) => ({
+        id: `hubspot-${row.contentId}`,
+        contentId: row.contentId,
+        name: cleanText(row.name || ""),
+        source: "hubspot"
+      }))
+      .filter((template) => template.name);
+  }
+
+  function refreshHubSpotTemplates(onLoaded) {
+    if (hubspotTemplateState.inFlight) return;
+    const fresh = Date.now() - hubspotTemplateState.fetchedAt < HUBSPOT_TEMPLATE_CACHE_MS;
+    if (fresh && hubspotTemplateState.items.length) return;
+
+    hubspotTemplateState.inFlight = fetchHubSpotTemplates()
+      .then((items) => {
+        hubspotTemplateState.items = items;
+        hubspotTemplateState.failed = false;
+      })
+      .catch(() => {
+        hubspotTemplateState.failed = true;
+      })
+      .finally(() => {
+        hubspotTemplateState.fetchedAt = Date.now();
+        hubspotTemplateState.inFlight = null;
+        onLoaded?.();
+      });
+  }
+
+  // HubSpot templates carry personalization tokens (including tracked document
+  // links) that only HubSpot can resolve, so we never insert their body
+  // ourselves. We open HubSpot's own picker with the name already typed in.
+  async function applyHubSpotTemplate(template) {
+    const dialog = findOpenEmailDialog();
+    if (!dialog) throw new Error("Open the email composer first.");
+
+    const tab = Array.from(dialog.querySelectorAll("a, button, [role='tab'], [role='link']")).find(
+      (el) => isVisible(el) && cleanText(el.textContent || "").toLowerCase() === "templates"
+    );
+    if (!tab) throw new Error("Could not find HubSpot's Templates button.");
+    tab.click();
+
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      await sleep(150);
+      const input = Array.from(document.querySelectorAll("input")).find(
+        (el) => isVisible(el) && /search templates/i.test(el.getAttribute("placeholder") || "")
+      );
+      if (input) {
+        setInputValue(input, template.name);
+        return;
+      }
+    }
+    throw new Error("HubSpot's template picker did not open.");
+  }
+
   const COMPOSER_SEARCH_KINDS = {
     email: {
       rowId: COMPOSER_TEMPLATE_SEARCH_ROW_ID,
@@ -1765,8 +1858,11 @@
         if (text.includes("enter your task") || text.includes("task type")) return null;
         return dialog;
       },
-      getTemplates: () => inlineQuickActionsState.templates?.email || [],
-      apply: (template) => applyInlineEmailTemplate(template)
+      getTemplates: () => [...(inlineQuickActionsState.templates?.email || []), ...hubspotTemplateState.items],
+      apply: (template) =>
+        String(template?.source || "").toLowerCase() === "hubspot"
+          ? applyHubSpotTemplate(template)
+          : applyInlineEmailTemplate(template)
     },
     note: {
       rowId: COMPOSER_NOTE_SEARCH_ROW_ID,
@@ -1883,6 +1979,29 @@
 
       .cp-cts-dropdown.cp-cts-open {
         display: block;
+      }
+
+      .cp-cts-badge {
+        flex: 0 0 auto;
+        padding: 1px 6px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+
+      .cp-cts-badge-cp {
+        background: #eef4fb;
+        border-color: #d8e6f8;
+        color: #0b66c3;
+      }
+
+      .cp-cts-badge-hs {
+        background: #fff1ec;
+        border-color: #ffd6c9;
+        color: #c2451c;
       }
 
       .cp-cts-section {
@@ -2031,21 +2150,34 @@
       kindState.activeIndex = 0;
     }
 
-    const cloud = visible.filter((template) => String(template?.source || "").toLowerCase() === "cloud");
-    const personal = visible.filter((template) => String(template?.source || "").toLowerCase() !== "cloud");
+    const sourceOf = (template) => String(template?.source || "").toLowerCase();
+    const cloud = visible.filter((template) => sourceOf(template) === "cloud");
+    const hubspot = visible.filter((template) => sourceOf(template) === "hubspot");
+    const personal = visible.filter((template) => !["cloud", "hubspot"].includes(sourceOf(template)));
 
     const renderItem = (template) => {
       const index = kindState.visibleTemplateIds.indexOf(String(template.id));
       const isUsed = hasInlineTemplateBeenUsed(kindKey, template.id);
       const isActive = index === kindState.activeIndex;
+      const isHubSpot = sourceOf(template) === "hubspot";
+      const badge = isHubSpot
+        ? "<span class='cp-cts-badge cp-cts-badge-hs'>HubSpot</span>"
+        : "<span class='cp-cts-badge cp-cts-badge-cp'>Contact Point</span>";
       return (
         `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-cts-template-id='${escapeHtml(
           String(template.id)
         )}' data-cts-index='${index}'>` +
         `<span class='cp-cts-item-label'>${escapeHtml(template.name || "Untitled")}</span>` +
         "<span class='cp-cts-item-meta'>" +
-        `${String(template?.source || "").toLowerCase() === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
-        `<span class='cp-cts-check ${isUsed ? "is-used" : ""}' aria-hidden='true' title='${isUsed ? "Already sent to this contact" : ""}'>✓</span>` +
+        badge +
+        `${sourceOf(template) === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
+        `${
+          isHubSpot
+            ? ""
+            : `<span class='cp-cts-check ${isUsed ? "is-used" : ""}' aria-hidden='true' title='${
+                isUsed ? "Already sent to this contact" : ""
+              }'>✓</span>`
+        }` +
         "</span>" +
         "</button>"
       );
@@ -2053,7 +2185,8 @@
 
     dropdown.innerHTML =
       (cloud.length ? "<div class='cp-cts-section'>Cloud</div>" + cloud.map(renderItem).join("") : "") +
-      (personal.length ? "<div class='cp-cts-section'>Personal</div>" + personal.map(renderItem).join("") : "");
+      (personal.length ? "<div class='cp-cts-section'>Personal</div>" + personal.map(renderItem).join("") : "") +
+      (hubspot.length ? "<div class='cp-cts-section'>HubSpot</div>" + hubspot.map(renderItem).join("") : "");
   }
 
   function closeComposerTemplateDropdown(kindKey) {
@@ -2143,6 +2276,11 @@
     input.setAttribute("aria-label", COMPOSER_SEARCH_KINDS[kindKey].placeholder);
     input.addEventListener("focus", () => {
       kindState.open = true;
+      if (kindKey === "email") {
+        refreshHubSpotTemplates(() => {
+          if (row.isConnected && kindState.open) renderComposerTemplateDropdown(kindKey);
+        });
+      }
       renderComposerTemplateDropdown(kindKey);
     });
     input.addEventListener("input", () => {
