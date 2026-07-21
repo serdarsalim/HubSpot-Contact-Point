@@ -1815,10 +1815,64 @@
       });
   }
 
-  // HubSpot templates carry personalization tokens (including tracked document
-  // links) that only HubSpot can resolve, so we never insert their body
-  // ourselves. We open HubSpot's own picker with the name already typed in.
-  async function applyHubSpotTemplate(template) {
+  async function fetchHubSpotTemplateDetail(contentId) {
+    const portalId = getHubSpotPortalId();
+    const csrf = readBrowserCookie("hubspotapi-csrf");
+    if (!portalId || !csrf || !contentId) return null;
+
+    const res = await fetch(
+      `/api/sales-templates/v1/templates/${encodeURIComponent(contentId)}?portalId=${encodeURIComponent(portalId)}`,
+      { credentials: "include", headers: { "X-HubSpot-CSRF-hubspotapi": csrf } }
+    );
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  function findEmailSenderName(dialog) {
+    const match = elementText(dialog).match(/From\s+([^(]{2,60})\(/);
+    return match ? cleanText(match[1]) : "";
+  }
+
+  // HubSpot templates use {{ contact.x }} and {{ sender.x }} tokens, which we
+  // can fill from the record. Anything else — custom.* tracked document links,
+  // {{#if}} conditionals — only HubSpot's own renderer can produce, so those
+  // templates hand off to its picker rather than ship a broken link.
+  function resolveHubSpotTemplateHtml(rawHtml, tokens, senderName) {
+    let unresolved = "";
+    const html = String(rawHtml || "").replace(/\{\{([^{}]*)\}\}/g, (match, inner) => {
+      if (unresolved) return match;
+      const key = cleanText(inner).toLowerCase();
+      if (!/^[a-z0-9_.]+$/.test(key)) {
+        unresolved = key || "conditional";
+        return match;
+      }
+
+      const dot = key.indexOf(".");
+      const scope = dot === -1 ? "" : key.slice(0, dot);
+      const prop = dot === -1 ? key : key.slice(dot + 1);
+
+      let value = "";
+      if (scope === "contact") {
+        value = cleanText(tokens[inlineTokenKey(prop)] || "");
+      } else if (scope === "sender" || scope === "owner") {
+        const parts = senderName.split(" ").filter(Boolean);
+        if (prop === "firstname") value = parts[0] || "";
+        else if (prop === "lastname") value = parts.slice(1).join(" ");
+        else if (prop === "fullname" || prop === "name") value = senderName;
+      }
+
+      // An empty value is treated as unresolvable: silently blanking a token
+      // is worse than handing the template to HubSpot.
+      if (!value) {
+        unresolved = key;
+        return match;
+      }
+      return escapeHtml(value);
+    });
+    return { html, unresolved };
+  }
+
+  async function openHubSpotTemplatePicker(template) {
     const dialog = findOpenEmailDialog();
     if (!dialog) throw new Error("Open the email composer first.");
 
@@ -1839,6 +1893,30 @@
       }
     }
     throw new Error("HubSpot's template picker did not open.");
+  }
+
+  async function applyHubSpotTemplate(template) {
+    const dialog = findOpenEmailDialog();
+    if (!dialog) throw new Error("Open the email composer first.");
+
+    const detail = await fetchHubSpotTemplateDetail(template?.contentId).catch(() => null);
+    if (detail?.body) {
+      const tokens = buildInlineTemplateTokens(getInlineContactContextOrThrow());
+      const senderName = findEmailSenderName(dialog);
+      const body = resolveHubSpotTemplateHtml(detail.body, tokens, senderName);
+      const subject = resolveHubSpotTemplateHtml(detail.subject || "", tokens, senderName);
+
+      if (!body.unresolved && !subject.unresolved) {
+        await applyEmailTemplateOnPage(
+          htmlToPlainText(subject.html),
+          htmlToPlainText(body.html),
+          body.html
+        );
+        return;
+      }
+    }
+
+    await openHubSpotTemplatePicker(template);
   }
 
   const COMPOSER_SEARCH_KINDS = {
