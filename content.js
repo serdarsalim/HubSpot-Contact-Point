@@ -1802,8 +1802,8 @@
         /* Purple is the one hue absent from HubSpot's palette, so the row can
            never be mistaken for native chrome. Keep it saturated enough to
            read as deliberate against the slate-blue composer header. */
-        background: #f4f0fd;
-        border-bottom: 1px solid #e0d6f7;
+        background: #e8dffa;
+        border-bottom: 1px solid #d3c4f2;
       }
 
       .cp-cts-bolt {
@@ -1814,7 +1814,10 @@
 
       .cp-cts-input-wrap {
         position: relative;
-        flex: 1 1 auto;
+        /* Capped, not full width: the field's width should suggest how much
+           you type into it, and template names are short. Still shrinks on
+           narrow composers. */
+        flex: 0 1 440px;
         min-width: 0;
       }
 
@@ -1836,7 +1839,7 @@
         height: 30px;
         box-sizing: border-box;
         padding: 0 10px 0 29px;
-        border: 1px solid #e0d6f7;
+        border: 1px solid #d3c4f2;
         border-radius: 6px;
         background: #ffffff;
         color: #1a2a3e;
@@ -1856,10 +1859,12 @@
       }
 
       .cp-cts-dropdown {
+        /* Anchored to the input wrap, so it tracks the capped field width
+           instead of spanning the whole row. */
         position: absolute;
-        top: calc(100% - 4px);
-        left: 16px;
-        right: 16px;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
         z-index: 30;
         display: none;
         max-height: 280px;
@@ -2156,8 +2161,8 @@
     });
 
     row.appendChild(bolt);
+    inputWrap.appendChild(dropdown);
     row.appendChild(inputWrap);
-    row.appendChild(dropdown);
 
     // Email composer: below its tab bar. The tab list itself lives inside a
     // flex row, so climb to the first ancestor spanning (nearly) the dialog
