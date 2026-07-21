@@ -3735,10 +3735,20 @@
     element.dispatchEvent(new EventCtor("change", { bubbles: true }));
   }
 
+  function decodeHtmlEntities(value) {
+    const raw = String(value || "");
+    if (!raw.includes("&")) return raw;
+    // A textarea's content is RCDATA: entities decode, markup does not become
+    // elements. Safe for strings we can't prove are markup.
+    const holder = document.createElement("textarea");
+    holder.innerHTML = raw;
+    return holder.value;
+  }
+
   function htmlToPlainText(value) {
     const raw = String(value || "");
     if (!raw) return "";
-    if (!/<[a-z][\s\S]*>/i.test(raw)) return cleanText(raw);
+    if (!/<[a-z][\s\S]*>/i.test(raw)) return cleanText(decodeHtmlEntities(raw));
     const container = document.createElement("div");
     container.innerHTML = raw;
     return cleanText(container.textContent || "");
@@ -5238,6 +5248,10 @@
     const noteBody = htmlToPlainText(filledBodyHtml) || filledBodyHtml;
     if (!noteBody) throw new Error("Selected note template is empty.");
 
+    // The task composer is checked first: findNoteEditor() also matches its
+    // fields, and would otherwise dump the whole body into the subject.
+    if (applyTemplateToOpenTaskComposer(template, filledBodyHtml, noteBody)) return;
+
     const existingEditor = findNoteEditor();
     if (existingEditor && getNoteComposerRoot(existingEditor)) {
       await createNoteOnPage(noteBody, filledBodyHtml);
@@ -5430,6 +5444,74 @@
     }
 
     return bestScore >= 16 ? best : null;
+  }
+
+  function scoreTaskBodyFieldCandidate(element, titleField) {
+    if (!(element instanceof Element) || !isVisible(element)) return -Infinity;
+    if (element === titleField) return -Infinity;
+    if (element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true") return -Infinity;
+
+    const hint = getElementHint(element);
+    const placeholder = cleanText(element.getAttribute?.("placeholder") || "").toLowerCase();
+    const text = `${hint} ${placeholder}`.trim();
+    let score = 0;
+
+    if (text.includes("task description")) score += 40;
+    if (text.includes("description")) score += 20;
+    if (text.includes("notes") || text.includes("note")) score += 16;
+    if (text.includes("body")) score += 10;
+    // The subject field and the date/time inputs are never the body.
+    if (text.includes("enter your task")) score -= 40;
+    if (text.includes("task title")) score -= 34;
+    if (text.includes("reminder") || text.includes("date") || text.includes("queue")) score -= 24;
+
+    if (element.getAttribute("contenteditable") === "true") score += 14;
+    if (element.closest("[data-selenium-test='rich-text-editor'], .ProseMirror")) score += 12;
+    if (String(element.tagName || "").toLowerCase() === "input") score -= 12;
+
+    const rect = element.getBoundingClientRect();
+    if (rect.height >= 60) score += 6;
+
+    return score;
+  }
+
+  function findTaskBodyField(root, titleField) {
+    if (!(root instanceof Element)) return null;
+    const candidates = Array.from(root.querySelectorAll("textarea, input, [contenteditable='true'], [role='textbox']"));
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (const candidate of candidates) {
+      const score = scoreTaskBodyFieldCandidate(candidate, titleField);
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    return bestScore >= 16 ? best : null;
+  }
+
+  // A note template applied while the task composer is open splits across the
+  // two fields: template name into the subject, body into the description.
+  // Notes have no title, so the note composer keeps taking body only.
+  function applyTemplateToOpenTaskComposer(template, filledBodyHtml, plainBody) {
+    const composerRoot = findTaskComposerRoot();
+    if (!(composerRoot instanceof Element)) return false;
+
+    const titleField = findTaskTitleField(composerRoot);
+    const bodyField = findTaskBodyField(composerRoot, titleField);
+    if (!titleField && !bodyField) return false;
+
+    const title = cleanText(template?.name || "");
+    if (titleField && title) setInputValue(titleField, title);
+
+    if (bodyField && (plainBody || filledBodyHtml)) {
+      clearEditorContent(bodyField);
+      setEditorContent(bodyField, plainBody, filledBodyHtml);
+    }
+
+    return true;
   }
 
   function focusTaskTitleField() {
