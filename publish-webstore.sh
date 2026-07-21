@@ -13,6 +13,8 @@
 # Usage:
 #   ./publish-webstore.sh            # build, upload a new version, and publish it live
 #   ./publish-webstore.sh --draft    # build + upload only (stages a draft, does NOT go live)
+#   ./publish-webstore.sh --yes      # live publish without the confirm prompt
+#                                    # (for non-interactive runs; --draft needs no flag)
 #
 # Note: after a real publish, Google reviews the submission before it reaches
 # users (hours to a few days). Upload != live.
@@ -22,7 +24,14 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
 
 DRAFT_ONLY=0
-[[ "${1:-}" == "--draft" ]] && DRAFT_ONLY=1
+ASSUME_YES=0
+for arg in "$@"; do
+  case "$arg" in
+    --draft) DRAFT_ONLY=1 ;;
+    --yes) ASSUME_YES=1 ;;
+    *) echo "Unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
 
 # --- load credentials -------------------------------------------------------
 if [[ -f "$ROOT_DIR/.env" ]]; then
@@ -45,7 +54,7 @@ rm -f "$ZIP"
 echo "Packaged: $ZIP"
 
 # --- confirm before anything that touches the live listing ------------------
-if [[ "$DRAFT_ONLY" -eq 0 ]]; then
+if [[ "$DRAFT_ONLY" -eq 0 && "$ASSUME_YES" -eq 0 ]]; then
   printf "About to UPLOAD and PUBLISH version %s to the public listing. Continue? [y/N] " "$VERSION"
   read -r reply
   [[ "$reply" == "y" || "$reply" == "Y" ]] || { echo "Aborted."; exit 1; }
