@@ -289,9 +289,38 @@ chrome.action.onClicked.addListener(() => {
   });
 });
 
+const WIDGET_SUNSET_MIGRATION_KEY = "contactWidgetSunsetMigrated";
+
+// The contact page widget is superseded by the in-composer template search
+// (email + note) and the phone-number WhatsApp popover. Turn it off once for
+// existing users: the popup writes this key on every bulk settings save, so a
+// stored `true` does not signal that anyone chose it. Users who kept composer
+// search off are skipped, since the widget is still their only way in.
+async function runWidgetSunsetMigration() {
+  const local = await chrome.storage.local.get(WIDGET_SUNSET_MIGRATION_KEY);
+  if (local?.[WIDGET_SUNSET_MIGRATION_KEY]) return;
+
+  const stored = await chrome.storage.sync.get(SETTINGS_KEY);
+  const settings = stored?.[SETTINGS_KEY];
+
+  if (settings && typeof settings === "object") {
+    const composerSearchOn = settings.composerTemplateSearchEnabled !== false;
+    if (composerSearchOn && settings.inlineQuickActionsEnabled !== false) {
+      await chrome.storage.sync.set({
+        [SETTINGS_KEY]: { ...settings, inlineQuickActionsEnabled: false }
+      });
+    }
+  }
+
+  await chrome.storage.local.set({ [WIDGET_SUNSET_MIGRATION_KEY]: true });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   void syncActionPopupBySettings().catch((error) => {
     console.error("Could not apply launch mode on install", error);
+  });
+  void runWidgetSunsetMigration().catch((error) => {
+    console.error("Could not run contact widget sunset migration", error);
   });
 });
 

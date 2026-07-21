@@ -941,7 +941,7 @@
     if (dom.noteTemplateInput) dom.noteTemplateInput.value = "";
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
     if (dom.inlineQuickActionsEnabledInput) {
-      dom.inlineQuickActionsEnabledInput.checked = state.settings.inlineQuickActionsEnabled !== false;
+      dom.inlineQuickActionsEnabledInput.checked = state.settings.inlineQuickActionsEnabled === true;
     }
     if (dom.phoneFlagsEnabledInput) {
       dom.phoneFlagsEnabledInput.checked = state.settings.phoneFlagsEnabled !== false;
@@ -2054,7 +2054,7 @@
       whatsappTemplates,
       noteTemplates
     };
-    state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled !== false;
+    state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled === true;
     state.settings.phoneFlagsEnabled = state.settings.phoneFlagsEnabled !== false;
     state.settings.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(state.settings.phoneFlagsExcludedIsos);
     state.settings.sidebarDeclutterEnabled = state.settings.sidebarDeclutterEnabled !== false;

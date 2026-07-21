@@ -4080,8 +4080,9 @@
     }
   };
 
+  // Opt-in now that the widget is superseded: absent means off, not on.
   function normalizeInlineQuickActionsEnabled(value) {
-    return value !== false;
+    return value === true;
   }
 
   function normalizePhoneFlagsExcludedIsos(value) {
