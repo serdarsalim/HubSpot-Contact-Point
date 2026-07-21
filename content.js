@@ -2032,9 +2032,6 @@
         position: relative;
         display: flex;
         align-items: center;
-        /* The input is centred in the row; the bolt is pulled out of flow so
-           it can't push the field off-centre. */
-        justify-content: center;
         gap: 8px;
         width: 100%;
         /* flex-basis 100% wraps to an own line in row parents, but grow must
@@ -2051,20 +2048,14 @@
       }
 
       .cp-cts-bolt {
-        position: absolute;
-        left: 16px;
-        top: 50%;
-        transform: translateY(-50%);
+        flex: 0 0 auto;
         font-size: 13px;
         line-height: 1;
       }
 
       .cp-cts-input-wrap {
         position: relative;
-        /* Capped, not full width: the field's width should suggest how much
-           you type into it, and template names are short. Still shrinks on
-           narrow composers. */
-        flex: 0 1 440px;
+        flex: 1 1 auto;
         min-width: 0;
       }
 
@@ -2129,12 +2120,14 @@
 
       .cp-cts-badge {
         flex: 0 0 auto;
-        padding: 1px 6px;
-        border-radius: 999px;
+        padding: 0 5px;
+        border-radius: 3px;
         border: 1px solid transparent;
-        font-size: 9.5px;
+        font-size: 8.5px;
         font-weight: 600;
-        letter-spacing: 0.02em;
+        line-height: 14px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
         white-space: nowrap;
       }
 
