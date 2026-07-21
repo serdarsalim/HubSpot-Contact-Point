@@ -1922,11 +1922,24 @@
           htmlToPlainText(body.html),
           body.html
         );
-        return;
+        return null;
       }
+
+      // Reported rather than opening the picker straight away: HubSpot's
+      // modal covers the composer, so a surprise modal reads as a bug.
+      return { needsHubSpotPicker: true, reason: describeUnresolvedToken(body.unresolved || subject.unresolved) };
     }
 
-    await openHubSpotTemplatePicker(template);
+    return { needsHubSpotPicker: true, reason: "its content could not be read" };
+  }
+
+  function describeUnresolvedToken(token) {
+    const key = String(token || "").toLowerCase();
+    if (key.startsWith("custom.documentlink")) return "it contains a tracked document link";
+    if (key.startsWith("custom.")) return "it uses a HubSpot-only field";
+    if (/^(#|\/|if|else|end)/.test(key)) return "it uses conditional logic";
+    if (key.startsWith("sender.") || key.startsWith("owner.")) return "the sender could not be read";
+    return `the ${key} field is not on this record`;
   }
 
   const COMPOSER_SEARCH_KINDS = {
@@ -2154,6 +2167,33 @@
         color: #7c98b6;
       }
 
+      .cp-cts-notice {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        font-size: 12.5px;
+        color: #33475b;
+      }
+
+      .cp-cts-notice-btn {
+        flex: 0 0 auto;
+        padding: 4px 10px;
+        border: 1px solid #b9c8d9;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #0b66c3;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .cp-cts-notice-btn:hover {
+        background: #eef4fb;
+        border-color: #0b66c3;
+      }
+
       /* WhatsApp template popover, anchored to the inline phone button. */
       .cp-wa-pop {
         position: fixed;
@@ -2295,7 +2335,22 @@
     kindState.busy = true;
     if (input instanceof HTMLInputElement) input.placeholder = "Applying...";
     try {
-      await COMPOSER_SEARCH_KINDS[kindKey].apply(template);
+      const result = await COMPOSER_SEARCH_KINDS[kindKey].apply(template);
+
+      if (result?.needsHubSpotPicker) {
+        const dropdown = row?.querySelector(".cp-cts-dropdown");
+        if (dropdown) {
+          dropdown.innerHTML =
+            "<div class='cp-cts-notice'>" +
+            `<span>Can't fill this one here because ${escapeHtml(cleanText(result.reason || ""))}.</span>` +
+            `<button type='button' class='cp-cts-notice-btn' data-cts-open-picker='${escapeHtml(
+              String(template.id)
+            )}'>Open in HubSpot</button>` +
+            "</div>";
+        }
+        return;
+      }
+
       markInlineTemplateUsed(kindKey, template.id);
       void trackInlineCloudTemplateUse(template);
       kindState.query = "";
@@ -2385,7 +2440,19 @@
     // mousedown beats the input's blur, so a click can't close the dropdown
     // before the selection lands.
     dropdown.addEventListener("mousedown", (event) => {
-      const item = event.target instanceof Element ? event.target.closest("[data-cts-template-id]") : null;
+      const target = event.target instanceof Element ? event.target : null;
+
+      const picker = target?.closest("[data-cts-open-picker]");
+      if (picker) {
+        event.preventDefault();
+        const id = picker.getAttribute("data-cts-open-picker");
+        const template = COMPOSER_SEARCH_KINDS[kindKey].getTemplates().find((item) => String(item?.id || "") === String(id));
+        if (template) void openHubSpotTemplatePicker(template).catch(() => {});
+        closeComposerTemplateDropdown(kindKey);
+        return;
+      }
+
+      const item = target?.closest("[data-cts-template-id]");
       if (!item) return;
       event.preventDefault();
       void handleComposerTemplateSelection(kindKey, item.getAttribute("data-cts-template-id"));
