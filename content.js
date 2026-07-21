@@ -5063,30 +5063,6 @@
         color: #dacdf0 !important;
       }
 
-      .cp-sig-remove-btn {
-        position: fixed;
-        z-index: 2147483647;
-        width: 22px;
-        height: 22px;
-        background: #dc2626;
-        color: #fff;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 15px;
-        font-weight: 900;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-        padding: 0;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.28);
-        pointer-events: all;
-      }
-
-      .cp-sig-remove-btn:hover {
-        background: #b91c1c;
-      }
     `;
     document.documentElement.appendChild(styleEl);
   }
@@ -6006,64 +5982,156 @@
     return null;
   }
 
-  function removeEmailSignatureFromComposer() {
-    const found = findSignatureInEmailComposer();
-    if (!found) throw new Error("No signature found in the open email composer.");
-    found.sig.remove();
-    dispatchInputLikeEvents(found.root);
+  const SIGNATURE_TOGGLE_ID = "cp-signature-toggle";
+  const SIGNATURE_TOGGLE_STYLE_ID = "cp-signature-toggle-styles";
+
+  // The detached signature node is kept so "Add signature" restores exactly
+  // what was removed, rather than a reconstruction of it.
+  const signatureToggleState = { removedNode: null, removedFromRoot: null };
+
+  function ensureSignatureToggleStyles() {
+    if (document.getElementById(SIGNATURE_TOGGLE_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = SIGNATURE_TOGGLE_STYLE_ID;
+    style.textContent = `
+      .cp-sig-toggle {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        margin: 0 0 0 4px;
+        padding: 0 10px;
+        border: 1px solid #b9c8d9;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #33475b;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 100ms ease, border-color 100ms ease;
+      }
+
+      .cp-sig-toggle:hover {
+        background: #f2f6fa;
+        border-color: #7c93ac;
+      }
+
+      .cp-sig-toggle[data-cp-state='removed'] {
+        border-color: #b9d4c4;
+        color: #1a6b45;
+      }
+
+      .cp-sig-toggle[data-cp-state='removed']:hover {
+        background: #eff8f3;
+        border-color: #6aa98a;
+      }
+    `;
+    document.documentElement.appendChild(style);
   }
 
-  let sigRemoveBtnScrollHandler = null;
-
-  function updateSigRemoveBtnPosition() {
-    const btn = document.querySelector(".cp-sig-remove-btn");
-    if (!btn) return;
-    const found = findSignatureInEmailComposer();
-    if (!found) {
-      btn.remove();
-      return;
+  function findEmailComposerBodyRoot(dialog) {
+    for (const bodyEditor of getBodyEditorCandidates(dialog)) {
+      const target = resolveEditorTarget(bodyEditor);
+      if (!target) continue;
+      const root = target.closest(".ProseMirror") || target;
+      if (root instanceof Element) return root;
     }
-    const rect = found.sig.getBoundingClientRect();
-    const btnSize = 22;
-    btn.style.top = `${Math.max(4, rect.top + 4)}px`;
-    btn.style.left = `${Math.max(4, rect.right - btnSize - 4)}px`;
+    return null;
   }
 
-  function injectSigRemoveButtonIfNeeded() {
+  function findAttachFileControl(dialog) {
+    const controls = Array.from(dialog.querySelectorAll("button, [role='button']"));
+    for (const control of controls) {
+      if (!isVisible(control)) continue;
+      const hint = `${control.getAttribute("aria-label") || ""} ${control.getAttribute("data-test-id") || ""} ${
+        control.getAttribute("title") || ""
+      }`.toLowerCase();
+      if (hint.includes("attach") || hint.includes("select-file-dropdown")) return control;
+    }
+    return null;
+  }
+
+  function toggleEmailSignature() {
+    const dialog = findOpenEmailDialog();
+    if (!dialog) return;
+
     const found = findSignatureInEmailComposer();
-    if (!found) {
-      document.querySelector(".cp-sig-remove-btn")?.remove();
-      if (sigRemoveBtnScrollHandler) {
-        document.removeEventListener("scroll", sigRemoveBtnScrollHandler, true);
-        sigRemoveBtnScrollHandler = null;
-      }
+    if (found) {
+      signatureToggleState.removedNode = found.sig;
+      signatureToggleState.removedFromRoot = found.root;
+      found.sig.remove();
+      dispatchInputLikeEvents(found.root);
       return;
     }
-    if (document.querySelector(".cp-sig-remove-btn")) {
-      updateSigRemoveBtnPosition();
+
+    const stashed = signatureToggleState.removedNode;
+    const root = signatureToggleState.removedFromRoot?.isConnected
+      ? signatureToggleState.removedFromRoot
+      : findEmailComposerBodyRoot(dialog);
+    if (!stashed || !root) return;
+
+    root.appendChild(stashed);
+    signatureToggleState.removedNode = null;
+    signatureToggleState.removedFromRoot = null;
+    dispatchInputLikeEvents(root);
+  }
+
+  function syncSignatureToggleIfNeeded() {
+    const dialog = findOpenEmailDialog();
+    const existing = document.getElementById(SIGNATURE_TOGGLE_ID);
+
+    if (!dialog) {
+      existing?.remove();
+      // A closed composer invalidates the stash: re-adding into a dead root
+      // would silently do nothing.
+      signatureToggleState.removedNode = null;
+      signatureToggleState.removedFromRoot = null;
       return;
     }
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "cp-sig-remove-btn";
-    btn.title = "Remove signature";
-    btn.setAttribute("aria-label", "Remove signature");
-    btn.innerHTML = "<b>\u00d7</b>";
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        removeEmailSignatureFromComposer();
-      } catch (_err) {
-        // Signature already gone; the interval will clean up the button.
-      }
-    });
-    document.body.appendChild(btn);
-    if (!sigRemoveBtnScrollHandler) {
-      sigRemoveBtnScrollHandler = updateSigRemoveBtnPosition;
-      document.addEventListener("scroll", sigRemoveBtnScrollHandler, true);
+
+    const hasSignature = !!findSignatureInEmailComposer();
+    const canRestore = !!signatureToggleState.removedNode;
+    if (!hasSignature && !canRestore) {
+      existing?.remove();
+      return;
     }
-    updateSigRemoveBtnPosition();
+
+    let btn = existing;
+    if (!btn || !dialog.contains(btn)) {
+      const anchor = findAttachFileControl(dialog);
+      if (!anchor) {
+        existing?.remove();
+        return;
+      }
+      ensureSignatureToggleStyles();
+      existing?.remove();
+
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = SIGNATURE_TOGGLE_ID;
+      btn.className = "cp-sig-toggle";
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleEmailSignature();
+        syncSignatureToggleIfNeeded();
+      });
+
+      // Climb out of any single-child wrappers so the pill lands beside the
+      // attach control as a toolbar item, not inside its button box.
+      let anchorItem = anchor;
+      while (anchorItem.parentElement && anchorItem.parentElement.children.length === 1 && anchorItem.parentElement !== dialog) {
+        anchorItem = anchorItem.parentElement;
+      }
+      anchorItem.parentElement?.insertBefore(btn, anchorItem.nextSibling);
+    }
+
+    const label = hasSignature ? "Remove signature" : "Add signature";
+    if (btn.textContent !== label) btn.textContent = label;
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+    btn.dataset.cpState = hasSignature ? "present" : "removed";
   }
 
   function startInlineQuickActionsWatcher() {
@@ -6077,7 +6145,7 @@
       INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
     );
     inlineQuickActionsState.sigWatcherTimerId = window.setInterval(
-      injectSigRemoveButtonIfNeeded,
+      syncSignatureToggleIfNeeded,
       INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
     );
     document.addEventListener("pointerdown", closeInlinePanelWhenClickingOutside, true);
